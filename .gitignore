@@ -1,3 +1,4 @@
+HEAD
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -170,5 +171,16 @@ cython_debug/
 # Ruff stuff:
 .ruff_cache/
 
+# Python template
+*.pyc
+__pycache__/
+.env
+venv/
+.DS_Store
+backend/venv/
+
 # PyPI configuration file
 .pypirc
+
+.DS_Store
+ 9b0b250 (syncing ramaining changes)
