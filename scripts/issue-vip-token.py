@@ -3,7 +3,7 @@ from xrpl.wallet import Wallet
 from xrpl.models.transactions import Payment
 from xrpl.utils import get_transaction_from_hash
 
-def issue_token(issuer_seed, destination_address, currency="VIB", amount="1000000"):
+def issue_token(issuer_seed, destination_address, currency="VIP", amount="1000000"):
     client = JsonRpcClient("wss://s.altnet.rippletest.net:51233")  # Testnet
     issuer_wallet = Wallet(seed=issuer_seed, sequence=None)
     

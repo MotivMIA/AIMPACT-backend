@@ -1,10 +1,26 @@
 from xrpl.clients import JsonRpcClient
 from xrpl.wallet import Wallet
 from xrpl.models.transactions import TrustSet
-from xrpl.utils import get_transaction_from_hash
+from xrpl.transaction import safe_sign_and_submit_transaction
+import time
 
-def create_trust_line(issuer_address, test_wallet_seed, currency="VIB", limit="1000000"):
-    client = JsonRpcClient("wss://s.altnet.rippletest.net:51233")  # Testnet
+def wait_for_transaction_confirmation(client, tx_hash, max_attempts=30, delay=2):
+    """Poll the ledger until the transaction is validated or max attempts are reached."""
+    for _ in range(max_attempts):
+        try:
+            response = client.request({
+                "command": "tx",
+                "transaction": tx_hash
+            })
+            if response.is_successful() and response.result.get("validated", False):
+                return response
+        except Exception as e:
+            pass
+        time.sleep(delay)
+    raise Exception("Transaction not validated within the expected time")
+
+def create_trust_line(issuer_address, test_wallet_seed, currency="VIP", limit="1000000"):
+    client = JsonRpcClient("https://s.altnet.rippletest.net:51234")  # Testnet
     test_wallet = Wallet(seed=test_wallet_seed, sequence=None)
     
     trust_set_tx = TrustSet(
@@ -16,9 +32,9 @@ def create_trust_line(issuer_address, test_wallet_seed, currency="VIB", limit="1
         }
     )
     
-    response = client.submit_and_wait(trust_set_tx, wallet=test_wallet)
+    response = safe_sign_and_submit_transaction(trust_set_tx, test_wallet, client)
     tx_hash = response.result['tx_json']['hash']
-    tx_result = get_transaction_from_hash(tx_hash, client)
+    tx_result = wait_for_transaction_confirmation(client, tx_hash)
     return tx_result
 
 if __name__ == "__main__":

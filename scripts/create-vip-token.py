@@ -19,10 +19,10 @@ payment = Payment(
     account=issuer_wallet.classic_address,
     destination=user_address,
     amount={
-        "currency": "VIB",
+        "currency": "VIP",
         "value": "1000000000",
         "issuer": issuer_wallet.classic_address
     }
 )
 response = submit_and_wait(payment, client, issuer_wallet)
-print(f"Issued 1,000,000,000 VIB to {user_address}")
+print(f"Issued 1,000,000,000 VIP to {user_address}")
