@@ -5,8 +5,9 @@ from xrpl.clients import JsonRpcClient
 from xrpl.wallet import Wallet
 from xrpl.models.transactions import Payment
 from xrpl.models.requests import Tx
-from xrpl.transaction import submit_and_wait
+from xrpl.transaction import safe_sign_and_submit_transaction
 import os
+import time
 
 app = Flask(__name__)
 CORS(app)
@@ -42,6 +43,18 @@ def account_lines():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+def wait_for_transaction_confirmation(client, tx_hash, max_attempts=30, delay=2):
+    """Poll the ledger until the transaction is validated or max attempts are reached."""
+    for _ in range(max_attempts):
+        try:
+            response = client.request(Tx(transaction=tx_hash))
+            if response.is_successful() and response.result.get("validated", False):
+                return response
+        except Exception as e:
+            pass
+        time.sleep(delay)
+    raise Exception("Transaction not validated within the expected time")
+
 @app.route('/api/process_payment', methods=['POST'])
 def process_payment():
     try:
@@ -69,10 +82,10 @@ def process_payment():
                 "issuer": issuer_wallet.classic_address
             }
         )
-        response = submit_and_wait(payment_tx, client, issuer_wallet)
+        response = safe_sign_and_submit_transaction(payment_tx, issuer_wallet, client)
         tx_hash = response.result['tx_json']['hash']
-        # Fetch transaction details
-        tx_result = client.request(Tx(transaction=tx_hash))
+        # Wait for transaction confirmation
+        tx_result = wait_for_transaction_confirmation(client, tx_hash)
 
         # Send fee to fee wallet
         fee_tx = Payment(
@@ -84,10 +97,10 @@ def process_payment():
                 "issuer": issuer_wallet.classic_address
             }
         )
-        fee_response = submit_and_wait(fee_tx, client, issuer_wallet)
+        fee_response = safe_sign_and_submit_transaction(fee_tx, issuer_wallet, client)
         fee_tx_hash = fee_response.result['tx_json']['hash']
-        # Fetch fee transaction details
-        fee_tx_result = client.request(Tx(transaction=fee_tx_hash))
+        # Wait for fee transaction confirmation
+        fee_tx_result = wait_for_transaction_confirmation(client, fee_tx_hash)
 
         return jsonify({"status": "success", "tx_hash": tx_hash, "fee_tx_hash": fee_tx_hash}), 200
     except Exception as e:
