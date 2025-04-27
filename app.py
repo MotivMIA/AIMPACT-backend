@@ -4,7 +4,8 @@ import xrpl
 from xrpl.clients import JsonRpcClient
 from xrpl.wallet import Wallet
 from xrpl.models.transactions import Payment
-from xrpl.utils import get_transaction_from_hash
+from xrpl.models.requests import Tx
+import os
 
 app = Flask(__name__)
 CORS(app)
@@ -52,7 +53,9 @@ def process_payment():
             return jsonify({"error": "Missing required parameters"}), 400
 
         client = JsonRpcClient("wss://s.altnet.rippletest.net:51233")
-        issuer_seed = "sEd7ahMHwHhigKGDaVStMs6eoL86i4z"  # Should be in environment variable
+        issuer_seed = os.getenv("ISSUER_SEED")
+        if not issuer_seed:
+            return jsonify({"error": "Issuer seed not configured"}), 500
         issuer_wallet = Wallet(seed=issuer_seed, sequence=None)
 
         # Send tokens to user
@@ -67,7 +70,8 @@ def process_payment():
         )
         response = client.submit_and_wait(payment_tx, wallet=issuer_wallet)
         tx_hash = response.result['tx_json']['hash']
-        tx_result = get_transaction_from_hash(tx_hash, client)
+        # Fetch transaction details
+        tx_result = client.request(Tx(transaction=tx_hash))
 
         # Send fee to fee wallet
         fee_tx = Payment(
@@ -81,7 +85,8 @@ def process_payment():
         )
         fee_response = client.submit_and_wait(fee_tx, wallet=issuer_wallet)
         fee_tx_hash = fee_response.result['tx_json']['hash']
-        fee_tx_result = get_transaction_from_hash(fee_tx_hash, client)
+        # Fetch fee transaction details
+        fee_tx_result = client.request(Tx(transaction=fee_tx_hash))
 
         return jsonify({"status": "success", "tx_hash": tx_hash, "fee_tx_hash": fee_tx_hash}), 200
     except Exception as e:
