@@ -5,6 +5,7 @@ from xrpl.clients import JsonRpcClient
 from xrpl.wallet import Wallet
 from xrpl.models.transactions import Payment
 from xrpl.models.requests import Tx
+from xrpl.transaction import submit_and_wait
 import os
 
 app = Flask(__name__)
@@ -68,7 +69,7 @@ def process_payment():
                 "issuer": issuer_wallet.classic_address
             }
         )
-        response = client.submit_and_wait(payment_tx, wallet=issuer_wallet)
+        response = submit_and_wait(payment_tx, client, issuer_wallet)
         tx_hash = response.result['tx_json']['hash']
         # Fetch transaction details
         tx_result = client.request(Tx(transaction=tx_hash))
@@ -83,7 +84,7 @@ def process_payment():
                 "issuer": issuer_wallet.classic_address
             }
         )
-        fee_response = client.submit_and_wait(fee_tx, wallet=issuer_wallet)
+        fee_response = submit_and_wait(fee_tx, client, issuer_wallet)
         fee_tx_hash = fee_response.result['tx_json']['hash']
         # Fetch fee transaction details
         fee_tx_result = client.request(Tx(transaction=fee_tx_hash))
