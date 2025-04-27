@@ -27,7 +27,7 @@ def wait_for_transaction_confirmation(client, tx_hash, max_attempts=30, delay=2)
         time.sleep(delay)
     raise Exception("Transaction not validated within the expected time")
 
-def create_trust_line(issuer_address, test_wallet_seed, currency="VIP", limit="1000000"):
+def remove_trust_line(issuer_address, test_wallet_seed, currency="MNX"):
     client = JsonRpcClient("https://s.altnet.rippletest.net:51234")  # Testnet
     test_wallet = Wallet(seed=test_wallet_seed, sequence=None)
     
@@ -36,7 +36,7 @@ def create_trust_line(issuer_address, test_wallet_seed, currency="VIP", limit="1
         limit_amount={
             "currency": currency,
             "issuer": issuer_address,
-            "value": limit
+            "value": "0"  # Setting limit to 0 removes the trust line
         }
     )
     
@@ -53,8 +53,8 @@ if __name__ == "__main__":
     issuer_address = "rQDmTszDNPZB2Bec8vELb9uGgYiBsdDkHS"
     test_wallet_seed = "sEdTxYqTkMrTZGczJAwkFBxL9mt76wk"
     try:
-        result = create_trust_line(issuer_address, test_wallet_seed)
-        print("Trust Line Created Successfully:")
+        result = remove_trust_line(issuer_address, test_wallet_seed)
+        print("Trust Line Removed Successfully:")
         print(result)
     except Exception as e:
-        print(f"Error creating trust line: {e}")
+        print(f"Error removing trust line: {e}")
