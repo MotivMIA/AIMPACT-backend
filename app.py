@@ -75,7 +75,7 @@ def process_payment():
 
         # Send tokens to user
         payment_amount = IssuedCurrencyAmount(
-            currency="VIBE",
+            currency="VIB",
             value=str(amount),
             issuer=issuer_wallet.classic_address
         )
@@ -91,7 +91,7 @@ def process_payment():
 
         # Send fee to fee wallet
         fee_amount = IssuedCurrencyAmount(
-            currency="VIBE",
+            currency="VIB",
             value=str(fee),
             issuer=issuer_wallet.classic_address
         )
