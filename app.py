@@ -5,6 +5,7 @@ from xrpl.clients import JsonRpcClient
 from xrpl.wallet import Wallet
 from xrpl.models.transactions import Payment
 from xrpl.models.requests import Tx
+from xrpl.models.amounts import IssuedCurrencyAmount
 from xrpl.transaction import safe_sign_and_submit_transaction
 import os
 import time
@@ -73,14 +74,15 @@ def process_payment():
         issuer_wallet = Wallet(seed=issuer_seed, sequence=None)
 
         # Send tokens to user
+        payment_amount = IssuedCurrencyAmount(
+            currency="VIBE",
+            value=str(amount),
+            issuer=issuer_wallet.classic_address
+        )
         payment_tx = Payment(
             account=issuer_wallet.classic_address,
             destination=account,
-            amount={
-                "currency": "VIBE",
-                "value": str(amount),
-                "issuer": issuer_wallet.classic_address
-            }
+            amount=payment_amount
         )
         response = safe_sign_and_submit_transaction(payment_tx, issuer_wallet, client)
         tx_hash = response.result['tx_json']['hash']
@@ -88,14 +90,15 @@ def process_payment():
         tx_result = wait_for_transaction_confirmation(client, tx_hash)
 
         # Send fee to fee wallet
+        fee_amount = IssuedCurrencyAmount(
+            currency="VIBE",
+            value=str(fee),
+            issuer=issuer_wallet.classic_address
+        )
         fee_tx = Payment(
             account=issuer_wallet.classic_address,
             destination=fee_wallet,
-            amount={
-                "currency": "VIBE",
-                "value": str(fee),
-                "issuer": issuer_wallet.classic_address
-            }
+            amount=fee_amount
         )
         fee_response = safe_sign_and_submit_transaction(fee_tx, issuer_wallet, client)
         fee_tx_hash = fee_response.result['tx_json']['hash']
