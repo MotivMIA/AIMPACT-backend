@@ -18,7 +18,7 @@ def account_info():
         account = request.args.get('account')
         if not account:
             return jsonify({"error": "Account parameter is required"}), 400
-        client = JsonRpcClient("wss://s.altnet.rippletest.net:51233")
+        client = JsonRpcClient("https://s.altnet.rippletest.net:51234")
         response = client.request({
             "command": "account_info",
             "account": account
@@ -33,7 +33,7 @@ def account_lines():
         account = request.args.get('account')
         if not account:
             return jsonify({"error": "Account parameter is required"}), 400
-        client = JsonRpcClient("wss://s.altnet.rippletest.net:51233")
+        client = JsonRpcClient("https://s.altnet.rippletest.net:51234")
         response = client.request({
             "command": "account_lines",
             "account": account,
@@ -66,7 +66,7 @@ def process_payment():
         if not account or not amount or not fee or not fee_wallet:
             return jsonify({"error": "Missing required parameters"}), 400
 
-        client = JsonRpcClient("wss://s.altnet.rippletest.net:51233")
+        client = JsonRpcClient("https://s.altnet.rippletest.net:51234")
         issuer_seed = os.getenv("ISSUER_SEED")
         if not issuer_seed:
             return jsonify({"error": "Issuer seed not configured"}), 500
