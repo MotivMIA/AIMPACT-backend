@@ -2,10 +2,11 @@ import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { sendError } from "../utils/response";
 
-export const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
+export const authMiddleware = (req: Request, res: Response, next: NextFunction): void => {
   const token = req.cookies.token;
   if (!token) {
-    return sendError(res, 401, { message: "No token provided" });
+    sendError(res, 401, { message: "No token provided" });
+    return;
   }
 
   try {
@@ -13,6 +14,7 @@ export const authMiddleware = (req: Request, res: Response, next: NextFunction) 
     req.user = { userId: decoded.userId };
     next();
   } catch (error) {
-    return sendError(res, 401, { message: "Invalid token" });
+    sendError(res, 401, { message: "Invalid token" });
+    return;
   }
 };

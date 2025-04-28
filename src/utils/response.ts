@@ -5,6 +5,6 @@ interface ErrorResponse {
   code?: string;
 }
 
-export const sendError = (res: Response, status: number, error: ErrorResponse) => {
-  return res.status(status).json({ error });
+export const sendError = (res: Response, status: number, error: ErrorResponse): void => {
+  res.status(status).json({ error });
 };

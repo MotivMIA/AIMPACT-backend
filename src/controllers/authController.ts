@@ -6,16 +6,18 @@ import User from "../models/User";
 import { sendError } from "../utils/response";
 import { validationResult } from "express-validator";
 
-export const register = async (req: Request, res: Response) => {
+export const register = async (req: Request, res: Response): Promise<void> => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    return sendError(res, 400, { message: errors.array()[0].msg });
+    sendError(res, 400, { message: errors.array()[0].msg });
+    return;
   }
 
   const { email, password } = req.body;
   const existingUser = await User.findOne({ email });
   if (existingUser) {
-    return sendError(res, 400, { message: "User already exists" });
+    sendError(res, 400, { message: "User already exists" });
+    return;
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
@@ -36,16 +38,18 @@ export const register = async (req: Request, res: Response) => {
   res.status(201).json({ message: "Registration successful" });
 };
 
-export const login = async (req: Request, res: Response) => {
+export const login = async (req: Request, res: Response): Promise<void> => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    return sendError(res, 400, { message: errors.array()[0].msg });
+    sendError(res, 400, { message: errors.array()[0].msg });
+    return;
   }
 
   const { email, password } = req.body;
   const user = await User.findOne({ email });
   if (!user || !(await bcrypt.compare(password, user.password))) {
-    return sendError(res, 401, { message: "Invalid credentials" });
+    sendError(res, 401, { message: "Invalid credentials" });
+    return;
   }
 
   if (user.isTwoFactorEnabled) {
@@ -62,7 +66,8 @@ export const login = async (req: Request, res: Response) => {
       maxAge: 300000,
     });
 
-    return res.json({ requiresTwoFactor: true });
+    res.json({ requiresTwoFactor: true });
+    return;
   }
 
   const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET!, {
@@ -79,12 +84,13 @@ export const login = async (req: Request, res: Response) => {
   res.json({ message: "Login successful" });
 };
 
-export const setupTwoFactor = async (req: Request, res: Response) => {
+export const setupTwoFactor = async (req: Request, res: Response): Promise<void> => {
   const { userId } = req.user;
   const user = await User.findById(userId);
 
   if (!user) {
-    return sendError(res, 404, { message: "User not found" });
+    sendError(res, 404, { message: "User not found" });
+    return;
   }
 
   const secret = speakeasy.generateSecret({
@@ -98,17 +104,19 @@ export const setupTwoFactor = async (req: Request, res: Response) => {
   res.json({ qrCode: secret.otpauth_url });
 };
 
-export const verifyTwoFactor = async (req: Request, res: Response) => {
+export const verifyTwoFactor = async (req: Request, res: Response): Promise<void> => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    return sendError(res, 400, { message: errors.array()[0].msg });
+    sendError(res, 400, { message: errors.array()[0].msg });
+    return;
   }
 
   const { userId, twoFactorCode } = req.body;
   const user = await User.findById(userId);
 
   if (!user || !user.isTwoFactorEnabled) {
-    return sendError(res, 400, { message: "2FA not enabled" });
+    sendError(res, 400, { message: "2FA not enabled" });
+    return;
   }
 
   const verified = speakeasy.totp.verify({
@@ -118,7 +126,8 @@ export const verifyTwoFactor = async (req: Request, res: Response) => {
   });
 
   if (!verified) {
-    return sendError(res, 401, { message: "Invalid 2FA code" });
+    sendError(res, 401, { message: "Invalid 2FA code" });
+    return;
   }
 
   const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET!, {
