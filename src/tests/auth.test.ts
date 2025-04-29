@@ -4,6 +4,8 @@ import connectDB from "../db";
 import mongoose from "mongoose";
 import { validationResult } from "express-validator";
 import { MongoMemoryServer } from "mongodb-memory-server";
+import dotenv from "dotenv";
+dotenv.config();
 
 let mongo: MongoMemoryServer;
 
