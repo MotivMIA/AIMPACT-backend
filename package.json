@@ -27,7 +27,7 @@
     "ts-node-dev": "^2.0.0"
   },
   "scripts": {
-    "dev": "ts-node-dev --esm src/server.ts",
+    "dev": "ts-node-dev --transpile-only src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
     "test": "jest"
