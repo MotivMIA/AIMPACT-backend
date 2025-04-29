@@ -4,12 +4,14 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import speakeasy from "speakeasy";
 import User from "../models/User";
-import { sendError } from "../utils/response";
-import "../../types/express"; // Ensure the extended Request type is loaded
 import { validationResult } from "express-validator";
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   const errors = validationResult(req);
+  console.log("Request body:", req.body);
+  console.log("Validation errors:", errors.array());
+  // Log the validation errors for debugging
+  // Check if there are validation errors
   if (!errors.isEmpty()) {
     sendError(res, 400, { message: errors.array()[0].msg });
     return;
