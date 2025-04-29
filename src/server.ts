@@ -1,4 +1,4 @@
-import app from "./app.ts";
+import app from "./app";
 import connectDB from "./db";
 
 const PORT = process.env.PORT || 5000;

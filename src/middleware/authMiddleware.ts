@@ -1,20 +1,30 @@
-import { Request, Response, NextFunction } from "express";
+import { Request, Response, NextFunction, Router } from "express";
 import jwt from "jsonwebtoken";
 import { sendError } from "../utils/response";
 
+const router = Router();
+
 export const authMiddleware = (req: Request, res: Response, next: NextFunction): void => {
-  const token = req.cookies.token;
+  const token = req.headers.authorization?.split(" ")[1];
   if (!token) {
-    sendError(res, 401, { message: "No token provided" });
+    res.status(401).json({ message: "Unauthorized" });
     return;
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
-    req.user = { userId: decoded.userId };
+    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as { userId: string };
+    req.user = { userId: decoded.userId }; // Assign `user` to the `Request` object
     next();
   } catch (error) {
-    sendError(res, 401, { message: "Invalid token" });
+    res.status(401).json({ message: "Invalid token" });
     return;
   }
 };
+
+router.get(
+  "/profile",
+  authMiddleware,
+  async (req: Request, res: Response): Promise<void> => {
+    // Route logic
+  }
+);

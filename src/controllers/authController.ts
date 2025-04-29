@@ -1,9 +1,11 @@
 import { Request, Response } from "express";
+// Removed unused and incorrect import of UserDocument
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import speakeasy from "speakeasy";
 import User from "../models/User";
 import { sendError } from "../utils/response";
+import "../../types/express"; // Ensure the extended Request type is loaded
 import { validationResult } from "express-validator";
 
 export const register = async (req: Request, res: Response): Promise<void> => {
@@ -85,11 +87,11 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 };
 
 export const setupTwoFactor = async (req: Request, res: Response): Promise<void> => {
-  const { userId } = req.user;
+  const { userId } = req.user!; // Use the `user` property
   const user = await User.findById(userId);
 
   if (!user) {
-    sendError(res, 404, { message: "User not found" });
+    res.status(404).json({ message: "User not found" });
     return;
   }
 
@@ -142,4 +144,14 @@ export const verifyTwoFactor = async (req: Request, res: Response): Promise<void
   });
 
   res.json({ message: "2FA verified" });
+};
+
+export const someControllerFunction = (req: Request, res: Response): void => {
+  const { userId } = req.user!;
+  // Use userId as needed
+};
+
+export const someAuthFunction = (req: Request, res: Response): void => {
+  const { userId } = req.user!;
+  // Use userId as needed
 };

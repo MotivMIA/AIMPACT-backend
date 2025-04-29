@@ -10,7 +10,7 @@ export const recordTransaction = async (req: Request, res: Response): Promise<vo
     return;
   }
 
-  const { userId } = req.user;
+  const { userId } = req.user!;
   const { txHash, from, to, amount, currency } = req.body;
 
   try {
@@ -39,4 +39,9 @@ export const getTransactions = async (req: Request, res: Response): Promise<void
     sendError(res, 500, { message: "Failed to fetch transactions" });
     return;
   }
+};
+
+export const someTransactionFunction = (req: Request, res: Response): void => {
+  const { userId } = req.user!;
+  // Use userId as needed
 };
