@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction, Router } from "express";
 import jwt from "jsonwebtoken";
 import { sendError } from "../utils/response";
+import { body } from "express-validator";
 
 const router = Router();
 
@@ -20,6 +21,11 @@ export const authMiddleware = (req: Request, res: Response, next: NextFunction):
     return;
   }
 };
+
+export const registerValidation = [
+  body("email").isEmail().withMessage("Invalid email"),
+  body("password").isLength({ min: 6 }).withMessage("Password must be at least 6 characters long"),
+];
 
 router.get(
   "/profile",

@@ -10,23 +10,34 @@ export const register = async (req: Request, res: Response): Promise<void> => {
   const errors = validationResult(req);
   console.log("Request body:", req.body);
   console.log("Validation errors:", errors.array());
-  // Log the validation errors for debugging
-  // Check if there are validation errors
+
   if (!errors.isEmpty()) {
-    sendError(res, 400, { message: errors.array()[0].msg });
+    res.status(400).json({ message: errors.array()[0].msg });
     return;
   }
 
   const { email, password } = req.body;
+
+  if (!email || !password) {
+    console.log("Missing email or password");
+    res.status(400).json({ message: "Email and password are required" });
+    return;
+  }
+
   const existingUser = await User.findOne({ email });
+  console.log("Existing user:", existingUser);
+
   if (existingUser) {
     sendError(res, 400, { message: "User already exists" });
     return;
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
+  console.log("Hashed password:", hashedPassword);
+
   const user = new User({ email, password: hashedPassword });
   await user.save();
+  console.log("User saved:", user);
 
   const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET!, {
     expiresIn: "1h",
@@ -45,7 +56,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 export const login = async (req: Request, res: Response): Promise<void> => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    sendError(res, 400, { message: errors.array()[0].msg });
+    console.log("Validation errors:", errors.array());    res.status(400).json({ message: errors.array()[0].msg });
     return;
   }
 
@@ -111,8 +122,7 @@ export const setupTwoFactor = async (req: Request, res: Response): Promise<void>
 export const verifyTwoFactor = async (req: Request, res: Response): Promise<void> => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    sendError(res, 400, { message: errors.array()[0].msg });
-    return;
+    console.log("Validation errors:", errors.array());    res.status(400).json({ message: errors.array()[0].msg });
   }
 
   const { userId, twoFactorCode } = req.body;
@@ -157,3 +167,27 @@ export const someAuthFunction = (req: Request, res: Response): void => {
   const { userId } = req.user!;
   // Use userId as needed
 };
+
+const sendError = (res: Response, statusCode: number, error: object): void => {
+  res.status(statusCode).json(error);
+};
+
+import request from "supertest";
+import app from "../app"; // Adjust the path to your Express app file
+
+it("should register a new user", async () => {
+  const res = await request(app).post("/api/auth/register").send({
+    email: "test@example.com",
+    password: "password123", // Ensure password meets the minimum length requirement
+  });
+  console.log("Response body:", res.body); // Debugging
+  expect(res.status).toBe(201);
+  expect(res.body).toHaveProperty("message", "Registration successful");
+});
+
+it("should return 400 if email or password is missing", async () => {
+  const res = await request(app).post("/api/auth/register").send({});
+  console.log("Response body:", res.body); // Debugging
+  expect(res.status).toBe(400);
+  expect(res.body).toHaveProperty("message", "Invalid email"); // Adjust based on validation logic
+});
