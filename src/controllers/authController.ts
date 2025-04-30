@@ -7,8 +7,6 @@ import { sendError } from "../utils/response";
 import { validationResult } from "express-validator";
 
 export const register = async (req: Request, res: Response): Promise<void> => {
-  console.log("Register request received:", req.body);
-  console.log("JWT_SECRET:", process.env.JWT_SECRET);
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     res.status(400).json({ message: errors.array()[0].msg });
@@ -23,7 +21,6 @@ export const register = async (req: Request, res: Response): Promise<void> => {
   }
 
   const existingUser = await User.findOne({ email });
-  console.log("Existing user:", existingUser);
   if (existingUser) {
     sendError(res, 400, { message: "User already exists" });
     return;
@@ -31,13 +28,11 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 
   const hashedPassword = await bcrypt.hash(password, 10);
   const user = new User({ email, password: hashedPassword });
-  console.log("Saving user:", user);
   await user.save();
 
   const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET!, {
     expiresIn: "1h",
   });
-  console.log("Generated token:", token);
 
   res.cookie("token", token, {
     httpOnly: true,
