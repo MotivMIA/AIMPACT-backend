@@ -773,7 +773,7 @@ cat "$SERVER_LOG" || echo "No server log available"
 # Test Register Endpoint
 echo "Testing register endpoint..."
 for i in {1..3}; do
-  REGISTER_OUTPUT=$(curl -i --max-time 10 -X POST http://localhost:5001/api/auth/register -H "Content-Type: application/json" -d '{"email":"test@example.com","password":"password123"}' || true)
+  REGISTER_OUTPUT=$(curl -s -i --max-time 10 -X POST http://localhost:5001/api/auth/register -H "Content-Type: application/json" -d '{"email":"test@example.com","password":"password123"}' || true)
   echo "Debug: Register endpoint response: $REGISTER_OUTPUT"
   if echo "$REGISTER_OUTPUT" | grep -q "Registration successful"; then
     echo -e "${GREEN}Register endpoint passed${NC}"
