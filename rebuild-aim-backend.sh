@@ -755,12 +755,12 @@ fi
 
 # Debug: Checking environment variables after sourcing .env
 echo "Debug: Checking environment variables after sourcing .env..."
-. "$PROJECT_DIR/.env"
+export $(cat "$PROJECT_DIR/.env" | xargs)
 env | grep -E 'MONGO_URI|MONGO_USER|MONGO_PASSWORD|MONGO_HOST|MONGO_DB|JWT_SECRET' || echo "No MongoDB or JWT environment variables found"
 
 # Start Server
 echo "Starting server..."
-cd "$PROJECT_DIR" && . ./.env && node -r dotenv/config node_modules/.bin/tsx src/server.ts > "$SERVER_LOG" 2>&1 &
+cd "$PROJECT_DIR" && export $(cat ./.env | xargs) && node -r dotenv/config node_modules/.bin/tsx src/server.ts > "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 sleep 5
 if ps -p $SERVER_PID > /dev/null; then
@@ -772,11 +772,11 @@ fi
 
 # Test Register Endpoint
 echo "Testing register endpoint..."
-REGISTER_OUTPUT=$(curl -s --max-time 10 -X POST http://localhost:5001/api/auth/register -H "Content-Type: application/json" -d '{"email":"test@example.com","password":"password123"}')
+REGISTER_OUTPUT=$(curl -s --max-time 10 -X POST http://localhost:5001/api/auth/register -H "Content-Type: application/json" -d '{"email":"test@example.com","password":"password123"}' || true)
 echo "Debug: Register endpoint response: $REGISTER_OUTPUT"
 if echo "$REGISTER_OUTPUT" | grep -q "Registration successful"; then
   echo -e "${GREEN}Register endpoint passed${NC}"
-  TOKEN=$(echo "$REGISTER_OUTPUT" | grep -o '"token":"[^"]*"' | sed 's/"token":"\(.*\)"/\1/')
+  TOKEN=$(echo "$REGISTER_OUTPUT" | grep -o '"token":"[^"]*"' | sed 's/"token":"\(.*\)"/\1/' || true)
 else
   echo -e "${RED}Register endpoint failed: $REGISTER_OUTPUT${NC}" | tee -a "$ERROR_LOG"
 fi
@@ -784,11 +784,11 @@ fi
 # Test Profile Endpoint
 if [ -n "$TOKEN" ]; then
   echo "Testing profile endpoint..."
-  PROFILE_OUTPUT=$(curl -s --max-time 10 http://localhost:5001/api/user/profile -H "Cookie: token=$TOKEN")
+  PROFILE_OUTPUT=$(curl -s --max-time 10 http://localhost:5001/api/user/profile -H "Cookie: token=$TOKEN" || true)
   if echo "$PROFILE_OUTPUT" | grep -q "User profile"; then
     echo -e "${GREEN}Profile endpoint passed${NC}"
   else
-    echo -e "${RED}Profile endpoint failed: $PROFILE_OUTPUT${NC}" | tee -a "$ERROR_LOG"
+    echo -e "${RED}Profile endpoint failed: $REGISTER_OUTPUT${NC}" | tee -a "$ERROR_LOG"
   fi
 else
   echo "Skipping profile endpoint test: No token available."
@@ -800,7 +800,7 @@ kill $SERVER_PID 2>/dev/null && echo "Server stopped" || echo "Server already st
 
 # Run Tests
 echo "Running Jest tests..."
-cd "$PROJECT_DIR" && . ./.env && npx jest && echo -e "${GREEN}Tests passed${NC}" || echo -e "${RED}Tests failed${NC}" | tee -a "$ERROR_LOG"
+cd "$PROJECT_DIR" && export $(cat ./.env | xargs) && npx jest && echo -e "${GREEN}Tests passed${NC}" || echo -e "${RED}Tests failed${NC}" | tee -a "$ERROR_LOG" || true
 
 # Prompt for Pushing Changes
 if [ "$NO_PROMPT" = true ]; then
