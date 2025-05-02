@@ -4,13 +4,6 @@
     "module": "ESNext",
     "moduleResolution": "node",
     "esModuleInterop": true,
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
-    "forceConsistentCasingInFileNames": true,
->>>>>>> origin/main
->>>>>>> origin/main
     "strict": true,
     "skipLibCheck": true,
     "outDir": "./dist",

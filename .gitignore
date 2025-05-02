@@ -2,11 +2,4 @@ node_modules/
 dist/
 .env
 *.log
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-=======
-.cache/
->>>>>>> origin/main
->>>>>>> origin/main
 data/
