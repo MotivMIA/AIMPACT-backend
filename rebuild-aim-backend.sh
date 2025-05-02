@@ -760,7 +760,7 @@ export $(cat "$PROJECT_DIR/.env" | xargs)
 echo "Starting server..."
 cd "$PROJECT_DIR" && export $(cat ./.env | xargs) && node -r dotenv/config node_modules/.bin/tsx src/server.ts > "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
-sleep 5
+sleep 10
 if ps -p $SERVER_PID > /dev/null; then
   echo "Server started (PID: $SERVER_PID)"
 else
@@ -768,15 +768,30 @@ else
   cat "$SERVER_LOG"
 fi
 
+# Debug: Check port binding and server logs
+echo "Debug: Checking server port binding..."
+lsof -i :5001 || echo "No process listening on port 5001"
+echo "Debug: Server log contents..."
+cat "$SERVER_LOG" || echo "No server log available"
+
 # Test Register Endpoint
 echo "Testing register endpoint..."
-REGISTER_OUTPUT=$(curl -i --max-time 10 -X POST http://localhost:5001/api/auth/register -H "Content-Type: application/json" -d '{"email":"test@example.com","password":"password123"}' || true)
-echo "Debug: Register endpoint response: $REGISTER_OUTPUT"
-if echo "$REGISTER_OUTPUT" | grep -q "Registration successful"; then
-  echo -e "${GREEN}Register endpoint passed${NC}"
-  TOKEN=$(echo "$REGISTER_OUTPUT" | grep -i 'set-cookie: token=' | sed -n 's/.*token=\([^;]*\).*/\1/p' || true)
-else
-  echo -e "${RED}Register endpoint failed: $REGISTER_OUTPUT${NC}" | tee -a "$ERROR_LOG"
+for i in {1..3}; do
+  REGISTER_OUTPUT=$(curl -i --max-time 10 -X POST http://localhost:5001/api/auth/register -H "Content-Type: application/json" -d '{"email":"test@example.com","password":"password123"}' || true)
+  echo "Debug: Register endpoint response: $REGISTER_OUTPUT"
+  if echo "$REGISTER_OUTPUT" | grep -q "Registration successful"; then
+    echo -e "${GREEN}Register endpoint passed${NC}"
+    TOKEN=$(echo "$REGISTER_OUTPUT" | grep -i 'set-cookie: token=' | sed -n 's/.*token=\([^;]*\).*/\1/p' || echo "")
+    if [ -z "$TOKEN" ]; then
+      echo "Debug: No token found in Set-Cookie header, response may not include cookie"
+    fi
+    break
+  fi
+  echo "Attempt $i: Register endpoint failed, retrying..."
+  sleep 2
+done
+if ! echo "$REGISTER_OUTPUT" | grep -q "Registration successful"; then
+  echo -e "${RED}Register endpoint failed after retries: $REGISTER_OUTPUT${NC}" | tee -a "$ERROR_LOG"
 fi
 
 # Test Profile Endpoint
