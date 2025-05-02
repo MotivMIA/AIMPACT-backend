@@ -41,6 +41,28 @@ check_mongo_status() {
   fi
 }
 
+# --- Setup Git Repository ---
+echo "Setting up Git repository..."
+if [ -d "$PROJECT_DIR/.git" ]; then
+  cd "$PROJECT_DIR"
+  git fetch origin 2>/dev/null
+  git stash 2>/dev/null || echo "No changes to stash"
+  git pull origin main --rebase || {
+    echo -e "${RED}Failed to pull from remote. Resolve conflicts manually.${NC}" | tee -a "$ERROR_LOG"
+    exit 1
+  }
+else
+  rm -rf "$PROJECT_DIR"
+  git clone git@github.com:MotivMIA/aim-backend.git "$PROJECT_DIR" 2>/dev/null || {
+    echo -e "${RED}Failed to clone repository. Initializing new one.${NC}" | tee -a "$ERROR_LOG"
+    mkdir -p "$PROJECT_DIR"
+    cd "$PROJECT_DIR"
+    git init -b main
+    git remote add origin git@github.com:MotivMIA/aim-backend.git 2>/dev/null || echo -e "${RED}Failed to set remote${NC}" | tee -a "$ERROR_LOG"
+  }
+fi
+cd "$PROJECT_DIR" || { echo -e "${RED}Failed to cd to $PROJECT_DIR${NC}" | tee -a "$ERROR_LOG"; exit 1; }
+
 # --- Backup Current Project ---
 echo "Backing up existing project..."
 if [ -d "$PROJECT_DIR" ]; then
@@ -53,16 +75,13 @@ fi
 echo "Preserving MongoDB data directory..."
 if [ -d "$DATA_DIR" ]; then
   rm -rf "$BACKUP_DIR" 2>/dev/null
-  mv "$DATA_DIR" "$BACKUP_DIR" && echo "Backed up to $BACKUP_DIR" || {
+  mkdir -p "$BACKUP_DIR"
+  mv "$DATA_DIR" "$BACKUP_DIR/db" && echo "Backed up to $BACKUP_DIR/db" || {
     echo -e "${RED}Failed to back up data directory${NC}" | tee -a "$ERROR_LOG"
   }
+else
+  echo "No MongoDB data directory found, skipping backup"
 fi
-
-# --- Delete and Recreate Project Directory ---
-echo "Recreating project directory..."
-rm -rf "$PROJECT_DIR" 2>/dev/null
-mkdir -p "$PROJECT_DIR" || { echo -e "${RED}Failed to create $PROJECT_DIR${NC}" | tee -a "$ERROR_LOG"; exit 1; }
-cd "$PROJECT_DIR" || { echo -e "${RED}Failed to cd to $PROJECT_DIR${NC}" | tee -a "$ERROR_LOG"; exit 1; }
 
 # --- Create Directory Structure ---
 echo "Creating directory structure..."
@@ -70,12 +89,13 @@ mkdir -p src/@types src/controllers src/middleware src/models src/routes src/uti
 
 # --- Restore MongoDB Data Directory ---
 echo "Restoring MongoDB data directory..."
-if [ -d "$BACKUP_DIR" ]; then
-  mv "$BACKUP_DIR" "$DATA_DIR" && echo "Restored data directory" || {
+if [ -d "$BACKUP_DIR/db" ]; then
+  mv "$BACKUP_DIR/db" "$DATA_DIR" && echo "Restored data directory" || {
     echo -e "${RED}Failed to restore data, creating new directory${NC}" | tee -a "$ERROR_LOG"
     mkdir -p "$DATA_DIR"
   }
 else
+  echo "No backup data found, creating new directory..."
   mkdir -p "$DATA_DIR"
 fi
 chmod -R 755 "$DATA_DIR" 2>/dev/null || echo -e "${RED}Failed to set permissions${NC}" | tee -a "$ERROR_LOG"
@@ -152,6 +172,7 @@ cat > package.json << 'EOF'
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.7.2",
     "speakeasy": "^2.0.0",
+    "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
@@ -164,6 +185,7 @@ cat > package.json << 'EOF'
     "@types/node": "^22.8.7",
     "@types/speakeasy": "^2.0.10",
     "@types/supertest": "^6.0.2",
+    "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.6",
     "jest": "^29.7.0",
     "mongodb-memory-server": "^10.1.4",
@@ -691,18 +713,10 @@ done
 echo "Testing TypeScript compilation..."
 npx tsc --noEmit || echo -e "${RED}Compilation failed${NC}" | tee -a "$ERROR_LOG"
 
-# --- Initialize Git ---
-echo "Initializing Git repository..."
-if [ ! -d .git ]; then
-  git init -b main
-  git remote add origin git@github.com:MotivMIA/aim-backend.git 2>/dev/null || echo -e "${RED}Failed to set remote${NC}" | tee -a "$ERROR_LOG"
-fi
+# --- Commit Changes ---
+echo "Committing changes..."
 git add .
-git commit -m "Initial AIM backend setup" || echo "No changes to commit"
-
-# --- Handle Git Remote ---
-echo "Syncing with remote repository..."
-git fetch origin 2>/dev/null && git merge origin/main --allow-unrelated-histories || echo -e "${RED}Merge with remote failed${NC}" | tee -a "$ERROR_LOG"
+git commit -m "Rebuild AIM backend setup" || echo "No changes to commit"
 git push origin main 2>/dev/null || echo -e "${RED}Push failed; resolve manually${NC}" | tee -a "$ERROR_LOG"
 
 # --- Verification ---
