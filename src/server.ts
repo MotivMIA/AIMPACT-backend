@@ -23,7 +23,7 @@ const PORT = process.env.PORT || 5001;
 const MONGO_URI = process.env.MONGO_URI || `mongodb://${process.env.MONGO_USER}:${process.env.MONGO_PASSWORD}@${process.env.MONGO_HOST}/${process.env.MONGO_DB}?authSource=admin`;
 
 (async () => {
-  //await getSecrets(); // Skip AWS Secrets Manager locally
+  await getSecrets();
   if (!MONGO_URI) throw new Error("MongoDB URI not provided");
   await connectDB();
   app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
