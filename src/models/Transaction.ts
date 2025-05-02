@@ -1,3 +1,7 @@
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> origin/main
 import mongoose, { Schema, Document } from "mongoose";
 
 export interface ITransaction extends Document {
@@ -21,3 +25,21 @@ const transactionSchema: Schema = new Schema({
 });
 
 export default mongoose.model<ITransaction>("Transaction", transactionSchema);
+<<<<<<< HEAD
+=======
+=======
+import mongoose from "mongoose";
+
+const transactionSchema = new mongoose.Schema({
+  userId: { type: String, required: true },
+  txHash: { type: String, required: true },
+  from: { type: String, required: true },
+  to: { type: String, required: true },
+  amount: { type: Number, required: true },
+  currency: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now },
+});
+
+export default mongoose.model("Transaction", transactionSchema);
+>>>>>>> origin/main
+>>>>>>> origin/main
