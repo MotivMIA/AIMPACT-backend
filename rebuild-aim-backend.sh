@@ -743,14 +743,10 @@ else
 fi
 echo "Cleanup complete, proceeding to start server..."
 
-# Debug: Checking .env file
-echo "Debug: Checking .env file..."
-if [ -f "$PROJECT_DIR/.env" ]; then
-  echo ".env file exists"
-  ls -l "$PROJECT_DIR/.env"
-  cat "$PROJECT_DIR/.env" | grep -E 'MONGO_URI|MONGO_USER|MONGO_PASSWORD|MONGO_HOST|MONGO_DB|JWT_SECRET' || echo "No MongoDB or JWT variables in .env"
-else
+# Ensure .env exists
+if [ ! -f "$PROJECT_DIR/.env" ]; then
   echo -e "${RED}.env file not found at $PROJECT_DIR/.env${NC}" | tee -a "$ERROR_LOG"
+  exit 1
 fi
 
 # Source .env
@@ -781,9 +777,9 @@ for i in {1..3}; do
   echo "Debug: Register endpoint response: $REGISTER_OUTPUT"
   if echo "$REGISTER_OUTPUT" | grep -q "Registration successful"; then
     echo -e "${GREEN}Register endpoint passed${NC}"
-    TOKEN=$(echo "$REGISTER_OUTPUT" | grep -i 'set-cookie: token=' | sed -n 's/.*token=\([^;]*\).*/\1/p' || echo "")
+    TOKEN=$(echo "$REGISTER_OUTPUT" | grep -i 'set-cookie: token=' | sed -n 's/.*token=\([^;]*\).*/\1/p' || echo "$REGISTER_OUTPUT" | grep -o '"token":"[^"]*"' | sed 's/"token":"\(.*\)"/\1/' || echo "")
     if [ -z "$TOKEN" ]; then
-      echo "Debug: No token found in Set-Cookie header, response may not include cookie"
+      echo "Debug: No token found in Set-Cookie header or JSON response"
     fi
     break
   fi
