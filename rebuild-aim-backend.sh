@@ -729,24 +729,23 @@ fi
 
 if [ "$verify_choice" = "y" ] || [ "$verify_choice" = "Y" ]; then
   echo "Starting verification..."
-
-  # -cleanup-
-  echo "Checking for existing server processes on port 5001..."
-  EXISTING_PIDS=$(lsof -i :5001 -t)
-  if [ -n "$EXISTING_PIDS" ]; then
-    for PID in $EXISTING_PIDS; do
-      echo "Stopping existing server (PID: $PID)..."
-      kill $PID 2>/dev/null || kill -9 $PID 2>/dev/null
-    done
-    # Verify port is free
-    if lsof -i :5001 > /dev/null; then
-      echo -e "${RED}Failed to free port 5001. Another process may still be using it.${NC}" | tee -a "$ERROR_LOG"
-    else
-      echo "Port 5001 is now free."
-    fi
+  # Prevent port conflicts
+echo "Checking for existing server processes on port 5001..."
+EXISTING_PIDS=$(lsof -i :5001 -t)
+if [ -n "$EXISTING_PIDS" ]; then
+  for PID in $EXISTING_PIDS; do
+    echo "Stopping existing server (PID: $PID)..."
+    kill $PID 2>/dev/null || kill -9 $PID 2>/dev/null
+  done
+  # Verify port is free
+  if lsof -i :5001 > /dev/null; then
+    echo -e "${RED}Failed to free port 5001. Another process may still be using it.${NC}" | tee -a "$ERROR_LOG"
   else
-    echo "No existing server process found on port 5001."
+    echo "Port 5001 is now free."
   fi
+else
+  echo "No existing server process found on port 5001."
+fi
 
   # Start Server
   npx tsx src/server.ts > "$SERVER_LOG" 2>&1 &
