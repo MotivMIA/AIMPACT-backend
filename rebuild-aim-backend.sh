@@ -138,6 +138,7 @@ MONGO_USER=admin
 MONGO_PASSWORD=securepassword
 MONGO_HOST=localhost:27017
 MONGO_DB=aim-backend
+MONGO_URI=mongodb://admin:securepassword@localhost:27017/aim-backend?authSource=admin
 JWT_SECRET=$(openssl rand -base64 48)
 PORT=5001
 FRONTEND_URL=http://localhost:5173
@@ -314,7 +315,7 @@ import mongoose from "mongoose";
 
 const connectDB = async (): Promise<void> => {
   const uri = process.env.MONGO_URI;
-  if (!uri) throw new Error("MONGO_URI not defined");
+  if (!uri) throw new Error(" AGR: MONGO_URI not defined");
   await mongoose.connect(uri);
   console.log("MongoDB connected");
 };
@@ -742,13 +743,24 @@ else
 fi
 echo "Cleanup complete, proceeding to start server..."
 
-# Debug environment variables
-echo "Debug: Checking environment variables..."
-env | grep -E 'MONGO_URI|MONGO_USER|MONGO_PASSWORD|MONGO_HOST|MONGO_DB' || echo "No MongoDB environment variables found"
+# Debug: Checking .env file
+echo "Debug: Checking .env file..."
+if [ -f "$PROJECT_DIR/.env" ]; then
+  echo ".env file exists"
+  ls -l "$PROJECT_DIR/.env"
+  cat "$PROJECT_DIR/.env" | grep -E 'MONGO_URI|MONGO_USER|MONGO_PASSWORD|MONGO_HOST|MONGO_DB|JWT_SECRET' || echo "No MongoDB or JWT variables in .env"
+else
+  echo -e "${RED}.env file not found at $PROJECT_DIR/.env${NC}" | tee -a "$ERROR_LOG"
+fi
+
+# Debug: Checking environment variables after sourcing .env
+echo "Debug: Checking environment variables after sourcing .env..."
+. "$PROJECT_DIR/.env"
+env | grep -E 'MONGO_URI|MONGO_USER|MONGO_PASSWORD|MONGO_HOST|MONGO_DB|JWT_SECRET' || echo "No MongoDB or JWT environment variables found"
 
 # Start Server
 echo "Starting server..."
-node -r dotenv/config node_modules/.bin/tsx src/server.ts > "$SERVER_LOG" 2>&1 &
+cd "$PROJECT_DIR" && . ./.env && node -r dotenv/config node_modules/.bin/tsx src/server.ts > "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 sleep 5
 if ps -p $SERVER_PID > /dev/null; then
@@ -760,10 +772,11 @@ fi
 
 # Test Register Endpoint
 echo "Testing register endpoint..."
-REGISTER_OUTPUT=$(curl -s -X POST http://localhost:5001/api/auth/register -H "Content-Type: application/json" -d '{"email":"test@example.com","password":"password123"}')
+REGISTER_OUTPUT=$(curl -s --max-time 10 -X POST http://localhost:5001/api/auth/register -H "Content-Type: application/json" -d '{"email":"test@example.com","password":"password123"}')
+echo "Debug: Register endpoint response: $REGISTER_OUTPUT"
 if echo "$REGISTER_OUTPUT" | grep -q "Registration successful"; then
   echo -e "${GREEN}Register endpoint passed${NC}"
-  TOKEN=$(echo "$REGISTER_OUTPUT" | sed -n 's/.*token=\([^;]*\).*/\1/p')
+  TOKEN=$(echo "$REGISTER_OUTPUT" | grep -o '"token":"[^"]*"' | sed 's/"token":"\(.*\)"/\1/')
 else
   echo -e "${RED}Register endpoint failed: $REGISTER_OUTPUT${NC}" | tee -a "$ERROR_LOG"
 fi
@@ -771,7 +784,7 @@ fi
 # Test Profile Endpoint
 if [ -n "$TOKEN" ]; then
   echo "Testing profile endpoint..."
-  PROFILE_OUTPUT=$(curl -s http://localhost:5001/api/user/profile -H "Cookie: token=$TOKEN")
+  PROFILE_OUTPUT=$(curl -s --max-time 10 http://localhost:5001/api/user/profile -H "Cookie: token=$TOKEN")
   if echo "$PROFILE_OUTPUT" | grep -q "User profile"; then
     echo -e "${GREEN}Profile endpoint passed${NC}"
   else
@@ -787,7 +800,7 @@ kill $SERVER_PID 2>/dev/null && echo "Server stopped" || echo "Server already st
 
 # Run Tests
 echo "Running Jest tests..."
-npx jest && echo -e "${GREEN}Tests passed${NC}" || echo -e "${RED}Tests failed${NC}" | tee -a "$ERROR_LOG"
+cd "$PROJECT_DIR" && . ./.env && npx jest && echo -e "${GREEN}Tests passed${NC}" || echo -e "${RED}Tests failed${NC}" | tee -a "$ERROR_LOG"
 
 # Prompt for Pushing Changes
 if [ "$NO_PROMPT" = true ]; then
