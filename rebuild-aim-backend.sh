@@ -721,72 +721,87 @@ git push origin main 2>/dev/null || echo -e "${RED}Push failed; resolve manually
 
 # --- Verification ---
 echo -e "${GREEN}Rebuild complete!${NC}"
-if [ "$NO_PROMPT" = true ]; then
-  verify_choice="y"
+echo "Starting verification..."
+
+# -cleanup-
+echo "Checking for existing server processes on port 5001..."
+EXISTING_PIDS=$(lsof -i :5001 -t 2>/dev/null || true)
+if [ -n "$EXISTING_PIDS" ]; then
+  for PID in $EXISTING_PIDS; do
+    echo "Stopping existing server (PID: $PID)..."
+    kill $PID 2>/dev/null || kill -9 $PID 2>/dev/null || true
+  done
+  # Verify port is free
+  if lsof -i :5001 > /dev/null 2>/dev/null; then
+    echo -e "${RED}Failed to free port 5001. Another process may still be using it.${NC}" | tee -a "$ERROR_LOG"
+  else
+    echo "Port 5001 is now free."
+  fi
 else
-  read -p "Verify server and tests? (y/n): " verify_choice
+  echo "No existing server process found on port 5001."
+fi
+echo "Cleanup complete, proceeding to start server..."
+
+# Debug environment variables
+echo "Debug: Checking environment variables..."
+env | grep -E 'MONGO_URI|MONGO_USER|MONGO_PASSWORD|MONGO_HOST|MONGO_DB' || echo "No MongoDB environment variables found"
+
+# Start Server
+echo "Starting server..."
+node -r dotenv/config node_modules/.bin/tsx src/server.ts > "$SERVER_LOG" 2>&1 &
+SERVER_PID=$!
+sleep 5
+if ps -p $SERVER_PID > /dev/null; then
+  echo "Server started (PID: $SERVER_PID)"
+else
+  echo -e "${RED}Server failed to start${NC}" | tee -a "$ERROR_LOG"
+  cat "$SERVER_LOG"
 fi
 
-if [ "$verify_choice" = "y" ] || [ "$verify_choice" = "Y" ]; then
-  echo "Starting verification..."
+# Test Register Endpoint
+echo "Testing register endpoint..."
+REGISTER_OUTPUT=$(curl -s -X POST http://localhost:5001/api/auth/register -H "Content-Type: application/json" -d '{"email":"test@example.com","password":"password123"}')
+if echo "$REGISTER_OUTPUT" | grep -q "Registration successful"; then
+  echo -e "${GREEN}Register endpoint passed${NC}"
+  TOKEN=$(echo "$REGISTER_OUTPUT" | sed -n 's/.*token=\([^;]*\).*/\1/p')
+else
+  echo -e "${RED}Register endpoint failed: $REGISTER_OUTPUT${NC}" | tee -a "$ERROR_LOG"
+fi
 
-  # -cleanup-
-  echo "Checking for existing server processes on port 5001..."
-  EXISTING_PIDS=$(lsof -i :5001 -t 2>/dev/null || true)
-  if [ -n "$EXISTING_PIDS" ]; then
-    for PID in $EXISTING_PIDS; do
-      echo "Stopping existing server (PID: $PID)..."
-      kill $PID 2>/dev/null || kill -9 $PID 2>/dev/null || true
-    done
-    # Verify port is free
-    if lsof -i :5001 > /dev/null 2>/dev/null; then
-      echo -e "${RED}Failed to free port 5001. Another process may still be using it.${NC}" | tee -a "$ERROR_LOG"
-    else
-      echo "Port 5001 is now free."
-    fi
+# Test Profile Endpoint
+if [ -n "$TOKEN" ]; then
+  echo "Testing profile endpoint..."
+  PROFILE_OUTPUT=$(curl -s http://localhost:5001/api/user/profile -H "Cookie: token=$TOKEN")
+  if echo "$PROFILE_OUTPUT" | grep -q "User profile"; then
+    echo -e "${GREEN}Profile endpoint passed${NC}"
   else
-    echo "No existing server process found on port 5001."
+    echo -e "${RED}Profile endpoint failed: $PROFILE_OUTPUT${NC}" | tee -a "$ERROR_LOG"
   fi
+else
+  echo "Skipping profile endpoint test: No token available."
+fi
 
-  # Start Server
-  npx tsx src/server.ts > "$SERVER_LOG" 2>&1 &
-  SERVER_PID=$!
-  sleep 5
-  if ps -p $SERVER_PID > /dev/null; then
-    echo "Server started (PID: $SERVER_PID)"
-  else
-    echo -e "${RED}Server failed to start${NC}" | tee -a "$ERROR_LOG"
-    cat "$SERVER_LOG"
-  fi
+# Stop Server
+echo "Stopping server..."
+kill $SERVER_PID 2>/dev/null && echo "Server stopped" || echo "Server already stopped"
 
-  # Test Register Endpoint
-  REGISTER_OUTPUT=$(curl -s -X POST http://localhost:5001/api/auth/register -H "Content-Type: application/json" -d '{"email":"test@example.com","password":"password123"}')
-  if echo "$REGISTER_OUTPUT" | grep -q "Registration successful"; then
-    echo -e "${GREEN}Register endpoint passed${NC}"
-    TOKEN=$(echo "$REGISTER_OUTPUT" | sed -n 's/.*token=\([^;]*\).*/\1/p')
-  else
-    echo -e "${RED}Register endpoint failed${NC}" | tee -a "$ERROR_LOG"
-  fi
+# Run Tests
+echo "Running Jest tests..."
+npx jest && echo -e "${GREEN}Tests passed${NC}" || echo -e "${RED}Tests failed${NC}" | tee -a "$ERROR_LOG"
 
-  # Test Profile Endpoint
-  if [ -n "$TOKEN" ]; then
-    PROFILE_OUTPUT=$(curl -s http://localhost:5001/api/user/profile -H "Cookie: token=$TOKEN")
-    if echo "$PROFILE_OUTPUT" | grep -q "User profile"; then
-      echo -e "${GREEN}Profile endpoint passed${NC}"
-    else
-      echo -e "${RED}Profile endpoint failed${NC}" | tee -a "$ERROR_LOG"
-    fi
-  fi
+# Prompt for Pushing Changes
+if [ "$NO_PROMPT" = true ]; then
+  push_choice="y"
+else
+  read -p "Push changes to remote repository? (y/n): " push_choice
+fi
 
-  # Stop Server
-  kill $SERVER_PID 2>/dev/null && echo "Server stopped"
-
-  # Run Tests
-  npx jest && echo -e "${GREEN}Tests passed${NC}" | echo -e "${RED}Tests failed${NC}" | tee -a "$ERROR_LOG"
-
-  # Push Changes
+if [ "$push_choice" = "y" ] || [ "$push_choice" = "Y" ]; then
+  echo "Pushing changes to remote repository..."
   git add . && git commit -m "Verified setup" || echo "No changes to commit"
   git push origin main || echo -e "${RED}Push failed${NC}" | tee -a "$ERROR_LOG"
+else
+  echo "Skipping push to remote repository."
 fi
 
 # --- Final Messages ---
