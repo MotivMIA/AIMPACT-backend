@@ -753,10 +753,8 @@ else
   echo -e "${RED}.env file not found at $PROJECT_DIR/.env${NC}" | tee -a "$ERROR_LOG"
 fi
 
-# Debug: Checking environment variables after sourcing .env
-echo "Debug: Checking environment variables after sourcing .env..."
+# Source .env
 export $(cat "$PROJECT_DIR/.env" | xargs)
-env | grep -E 'MONGO_URI|MONGO_USER|MONGO_PASSWORD|MONGO_HOST|MONGO_DB|JWT_SECRET' || echo "No MongoDB or JWT environment variables found"
 
 # Start Server
 echo "Starting server..."
@@ -772,11 +770,11 @@ fi
 
 # Test Register Endpoint
 echo "Testing register endpoint..."
-REGISTER_OUTPUT=$(curl -s --max-time 10 -X POST http://localhost:5001/api/auth/register -H "Content-Type: application/json" -d '{"email":"test@example.com","password":"password123"}' || true)
+REGISTER_OUTPUT=$(curl -i --max-time 10 -X POST http://localhost:5001/api/auth/register -H "Content-Type: application/json" -d '{"email":"test@example.com","password":"password123"}' || true)
 echo "Debug: Register endpoint response: $REGISTER_OUTPUT"
 if echo "$REGISTER_OUTPUT" | grep -q "Registration successful"; then
   echo -e "${GREEN}Register endpoint passed${NC}"
-  TOKEN=$(echo "$REGISTER_OUTPUT" | grep -o '"token":"[^"]*"' | sed 's/"token":"\(.*\)"/\1/' || true)
+  TOKEN=$(echo "$REGISTER_OUTPUT" | grep -i 'set-cookie: token=' | sed -n 's/.*token=\([^;]*\).*/\1/p' || true)
 else
   echo -e "${RED}Register endpoint failed: $REGISTER_OUTPUT${NC}" | tee -a "$ERROR_LOG"
 fi
@@ -788,7 +786,7 @@ if [ -n "$TOKEN" ]; then
   if echo "$PROFILE_OUTPUT" | grep -q "User profile"; then
     echo -e "${GREEN}Profile endpoint passed${NC}"
   else
-    echo -e "${RED}Profile endpoint failed: $REGISTER_OUTPUT${NC}" | tee -a "$ERROR_LOG"
+    echo -e "${RED}Profile endpoint failed: $PROFILE_OUTPUT${NC}" | tee -a "$ERROR_LOG"
   fi
 else
   echo "Skipping profile endpoint test: No token available."
@@ -797,6 +795,7 @@ fi
 # Stop Server
 echo "Stopping server..."
 kill $SERVER_PID 2>/dev/null && echo "Server stopped" || echo "Server already stopped"
+wait $SERVER_PID 2>/dev/null || true
 
 # Run Tests
 echo "Running Jest tests..."
