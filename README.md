@@ -17,7 +17,7 @@ Run `./deploy.sh` with `deploy.env` configured for Docker Hub and Render.
 ## Features
 - JWT & 2FA Authentication
 - Transaction Management
-- Rate Limiting
+- Configurable Rate Limiting
 - MongoDB with AWS Secrets Manager
 - Prometheus Metrics
 - Request Logging

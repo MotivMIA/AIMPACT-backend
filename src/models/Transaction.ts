@@ -14,7 +14,7 @@ const transactionSchema: Schema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
   amount: { type: Number, required: true },
   type: { type: String, required: true },
-  date: { type: Date, default: Date.now },
+  date: { type: Date, Fdefault: Date.now },
   category: { type: String },
   status: { type: String, default: "Pending" },
   description: { type: String }

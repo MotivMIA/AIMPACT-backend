@@ -39,4 +39,13 @@ describe("POST /api/v1/transactions", () => {
     expect(res.status).toBe(400);
     expect(res.body.message).toBe("Amount must be a number");
   });
+
+  it("should fail if type is invalid", async () => {
+    const res = await request(app)
+      .post("/api/v1/transactions")
+      .set("Cookie", `token=${token}`)
+      .send({ amount: 100, type: "invalid", category: "test", description: "Test transaction" });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe("Type must be 'deposit' or 'withdrawal'");
+  });
 });
