@@ -64,6 +64,18 @@ describe("POST /api/v1/transactions", () => {
   });
 });
 
+describe("GET /api/v1/transactions", () => {
+  it("should return paginated transactions", async () => {
+    const res = await request(app)
+      .get("/api/v1/transactions?page=1&limit=2")
+      .set("Cookie", `token=${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.transactions).toBeInstanceOf(Array);
+    expect(res.body.pagination).toHaveProperty("page", 1);
+    expect(res.body.pagination).toHaveProperty("limit", 2);
+  });
+});
+
 describe("PATCH /api/v1/transactions/status", () => {
   it("should update transaction status", async () => {
     const res = await request(app)

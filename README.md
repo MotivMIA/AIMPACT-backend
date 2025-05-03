@@ -24,3 +24,4 @@ Run `./deploy.sh` with `deploy.env` configured for Docker Hub and Render.
 - Request Logging
 - API Versioning (v1)
 - WebSocket for Real-Time Notifications
+- Paginated Transaction History

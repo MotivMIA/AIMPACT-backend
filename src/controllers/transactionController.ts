@@ -19,9 +19,9 @@ export const createTransaction = async (req: Request, res: Response) => {
 
 export const getTransactions = async (req: Request, res: Response) => {
   const { userId } = req.user!;
-  const { startDate, endDate, category, status } = req.query;
+  const { startDate, endDate, category, status, page = '1', limit = '10' } = req.query;
 
-  const query: any = { userId };
+  const query: any = |{ userId };
   if (startDate || endDate) {
     query.date = {};
     if (startDate) query.date.$gte = new Date(startDate as string);
@@ -30,8 +30,25 @@ export const getTransactions = async (req: Request, res: Response) => {
   if (category) query.category = category;
   if (status) query.status = status;
 
-  const transactions = await Transaction.find(query).sort({ date: -1 });
-  res.json({ transactions });
+  const pageNum = parseInt(page as string, 10);
+  const limitNum = parseInt(limit as string, 10);
+  const skip = (pageNum - 1) * limitNum;
+
+  const transactions = await Transaction.find(query)
+    .sort({ date: -1 })
+    .skip(skip)
+    .limit(limitNum);
+  const total = await Transaction.countDocuments(query);
+
+  res.json({
+    transactions,
+    pagination: {
+      page: pageNum,
+      limit: limitNum,
+      total,
+      pages: Math.ceil(total / limitNum)
+    }
+  });
 };
 
 export const updateTransactionStatus = async (req: Request, res: Response) => {
