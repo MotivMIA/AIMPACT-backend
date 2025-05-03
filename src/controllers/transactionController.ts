@@ -21,17 +21,24 @@ export const getTransactions = async (req: Request, res: Response) => {
   const { userId } = req.user!;
   const { startDate, endDate, category, status, page = '1', limit = '10' } = req.query;
 
-  const query: any = |{ userId };
-  if (startDate || endDate) {
-    query.date = {};
-    if (startDate) query.date.$gte = new Date(startDate as string);
-    if (endDate) query.date.$lte = new Date(endDate as string);
+  const query: any = { userId };
+  if (startDate) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate as string)) {
+      return sendError(res, 400, { message: "Invalid startDate format (YYYY-MM-DD)" });
+    }
+    query.date = { $gte: new Date(startDate as string) };
+  }
+  if (endDate) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate as string)) {
+      return sendError(res, 400, { message: "Invalid endDate format (YYYY-MM-DD)" });
+    }
+    query.date = { ...query.date, $lte: new Date(endDate as string) };
   }
   if (category) query.category = category;
   if (status) query.status = status;
 
-  const pageNum = parseInt(page as string, 10);
-  const limitNum = parseInt(limit as string, 10);
+  const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
+  const limitNum = Math.max(1, Math.min(100, parseInt(limit as string, 10) || 10));
   const skip = (pageNum - 1) * limitNum;
 
   const transactions = await Transaction.find(query)
@@ -63,7 +70,7 @@ export const updateTransactionStatus = async (req: Request, res: Response) => {
 
   transaction.status = status;
   await transaction.save();
-  
+
   const wss = (req.app.get('wss') as WebSocketServer);
   broadcastTransactionUpdate(wss, transaction);
 
