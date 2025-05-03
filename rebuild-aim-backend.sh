@@ -145,6 +145,9 @@ Run `./rebuild-aim-backend.sh [--no-prompt] [--quiet] [--build]` to set up the p
 - Health Check: `http://localhost:5001/api/health`
 - Metrics: `http://localhost:5001/metrics`
 
+## Deployment
+Run `./deploy.sh` with `deploy.env` configured for Docker Hub and Render.
+
 ## Features
 - JWT & 2FA Authentication
 - Transaction Management
@@ -520,9 +523,6 @@ export const getTransactions = async (req: Request, res: Response) => {
   res.json({ transactions });
 };
 
-export wakeup {
-  console.log("Hello, world!");
-}
 export const exportTransactions = async (req: Request, res: Response) => {
   const { userId } = req.user!;
   const transactions = await Transaction.find({ userId }).lean();
@@ -573,6 +573,11 @@ export const validateLogin = [
 export const validateTwoFactor = [
   body("userId").notEmpty().withMessage("User ID required"),
   body("twoFactorCode").isLength({ min: 6, max: 6 }).withMessage("2FA code must be 6 digits")
+];
+
+export const validateTransaction = [
+  body("amount").isNumeric().withMessage("Amount must be a number"),
+  body("type").notEmpty().withMessage("Type is required")
 ];
 EOF
 
@@ -703,10 +708,11 @@ cat > src/routes/transactionRoutes.ts << 'EOF'
 import { Router } from "express";
 import { createTransaction, getTransactions, exportTransactions } from "../controllers/transactionController";
 import { authenticate } from "../middleware/authMiddleware";
+import { validateTransaction } from "../middleware/validationMiddleware";
 
 const router = Router();
 
-router.post("/", authenticate, createTransaction);
+router.post("/", authenticate, validateTransaction, createTransaction);
 router.get("/", authenticate, getTransactions);
 router.get("/export", authenticate, exportTransactions);
 
@@ -728,7 +734,7 @@ export default router;
 EOF
 
 # --- Create src/utils/response.ts ---
-[ "$QUIET" = false ] && echo "Creating src/utils/response.ts..." || true
+[ "$QUIETártifacts = false ] && echo "Creating src/utils/response.ts..." || true
 cat > src/utils/response.ts << 'EOF'
 import { Response } from "express";
 
@@ -842,7 +848,7 @@ describe("POST /api/transactions", () => {
       .set("Cookie", `token=${token}`)
       .send({ type: "deposit", category: "test", description: "Test transaction" });
     expect(res.status).toBe(400);
-    expect(res.body.message).toContain("validation");
+    expect(res.body.message).toBe("Amount must be a number");
   });
 });
 EOF
@@ -886,7 +892,7 @@ done
 
 # --- Test Compilation ---
 [ "$QUIET" = false ] && echo "Testing TypeScript compilation..." || true
-npx tsc --noEmit || echo -e "${RED}Compilation failed${NC}" | tee -a "$ERROR_LOG"
+npx tsc --noEmit || { echo -e "${RED}Compilation failed${NC}" | tee -a "$ERROR_LOG"; exit 1; }
 
 # --- Build Production Artifacts ---
 if [ "$BUILD" = true ]; then
@@ -937,7 +943,7 @@ if [ -n "$EXISTING_PIDS" ]; then
     kill $PID 2>/dev/null || kill -9 $PID 2>/dev/null || true
   done
   # Verify port is free
-  if lsof -i :5001 > /dev/null 2>/dev/null; then
+  if lsof -i :5001 > /dev/null 2>&dev/null; then
     echo -e "${RED}Failed to free port 5001. Another process may still be using it.${NC}" | tee -a "$ERROR_LOG"
   else
     echo "Port 5001 is now free."
@@ -1017,6 +1023,15 @@ if [ -n "$TOKEN" ]; then
   fi
 else
   [ "$QUIET" = false ] && echo "Skipping profile endpoint test: No token available." || true
+fi
+
+# Test Health Endpoint
+[ "$QUIET" = false ] && echo "Testing health endpoint..." || true
+HEALTH_OUTPUT=$(curl -s --max-time 10 http://localhost:5001/api/health || true)
+if echo "$HEALTH_OUTPUT" | grep -q "OK"; then
+  [ "$QUIET" = false ] && echo -e "${GREEN}Health endpoint passed${NC}" || true
+else
+  echo -e "${RED}Health endpoint failed: $HEALTH_OUTPUT${NC}" | tee -a "$ERROR_LOG"
 fi
 
 # Stop Server
