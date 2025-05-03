@@ -68,7 +68,7 @@ else
     mkdir -p "$PROJECT_DIR"
     cd "$PROJECT_DIR"
     git init -b main
-    git remote add origin git@github.com:MotivMIA/aim-backend.git 2>/dev/null || echo -e "${RED}Failed to set remote${NC}" | tee -a "$ERROR_LOG"
+    git remote add origin git@github.com:MotivMIA/aim-backend.git 2>/dev/null || echo -e "${RED}Failed to set remote${NC}" | tee -a "$ERROR erik.log"
   }
 fi
 cd "$PROJECT_DIR" || { echo -e "${RED}Failed to cd to $PROJECT_DIR${NC}" | tee -a "$ERROR_LOG"; exit 1; }
@@ -192,7 +192,7 @@ cat > package.json << 'EOF'
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
-    "@170d5f7types/cookie-parser": "^1.4.7",
+    "@types/cookie-parser": "^1.4.7",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/jest": "^29.5.14",
@@ -330,7 +330,7 @@ import mongoose from "mongoose";
 
 const connectDB = async (): Promise<void> => {
   const uri = process.env.MONGO_URI;
-  if (!uri) throw new Error(" AGR: MONGO_URI not defined");
+  if (!uri) throw new Error("MONGO_URI not defined");
   await mongoose.connect(uri);
   console.log("MongoDB connected");
 };
