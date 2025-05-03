@@ -3,7 +3,14 @@
 Backend for the AIM Crypto project.
 
 ## Setup
-Run `./rebuild-aim-backend.sh [--no-prompt] [--quiet] [--build]` to set up the project.
+Run the setup scripts from the parent directory (e.g., ~/Documents/projects/scripts):
+
+- Full setup: `./scripts/master.sh`
+- Setup only: `./scripts/master.sh setup`
+- MongoDB setup only: `./scripts/master.sh mongo`
+- Verification only: `./scripts/master.sh verify`
+
+Scripts should be stored outside the project directory (e.g., ~/Documents/projects/scripts) to avoid being overwritten.
 
 ## Run
 - Development: `npm run dev`
