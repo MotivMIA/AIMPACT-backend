@@ -14,39 +14,49 @@ MONGO_LOG="$PROJECT_DIR/mongod.log"
 BACKUP_DIR="/tmp/aim-backend-data-backup-$(date +%s)"
 ERROR_LOG="$PROJECT_DIR/error.log"
 SERVER_LOG="$PROJECT_DIR/server.log"
+VERIFICATION_LOG="$PROJECT_DIR/verification.log"
 
-# --- Check for No-Prompt Flag ---
+# --- Check for Flags ---
+QUIET=false
 NO_PROMPT=false
-if [ "$1" = "--no-prompt" ]; then
-  NO_PROMPT=true
-  echo "Running in no-prompt mode..."
+if [ "$1" = "--quiet" ] || [ "$2" = "--quiet" ]; then
+  QUIET=true
 fi
+if [ "$1" = "--no-prompt" ] || [ "$2" = "--no-prompt" ]; then
+  NO_PROMPT=true
+  [ "$QUIET" = false ] && echo "Running in no-prompt mode..." || true
+fi
+
+# --- Clean Up Lingering Processes ---
+[ "$QUIET" = false ] && echo "Cleaning up lingering processes..." || true
+pgrep -f "mongod --dbpath $DATA_DIR" | xargs kill -9 2>/dev/null || true
+pgrep -f "tsx src/server.ts" | xargs kill -9 2>/dev/null || true
 
 # --- Function to Check MongoDB Status ---
 check_mongo_status() {
   local pid=$(pgrep mongod 2>/dev/null)
   local port_check=$(lsof -i :27017 | grep LISTEN 2>/dev/null)
   if [ -n "$pid" ] && [ -n "$port_check" ]; then
-    echo "MongoDB running (PID: $pid, Port: 27017)"
+    [ "$QUIET" = false ] && echo "MongoDB running (PID: $pid, Port: 27017)" || true
     if mongosh --host localhost --port 27017 --quiet --eval "db.runCommand({ ping: 1 })" > /dev/null 2>&1; then
-      echo "MongoDB responding to pings"
+      [ "$QUIET" = false ] && echo "MongoDB responding to pings" || true
       return 0
     else
       echo -e "${RED}MongoDB not responding${NC}" | tee -a "$ERROR_LOG"
       return 1
     fi
   else
-    echo "MongoDB not running"
+    [ "$QUIET" = false ] && echo "MongoDB not running" || true
     return 1
   fi
 }
 
 # --- Setup Git Repository ---
-echo "Setting up Git repository..."
+[ "$QUIET" = false ] && echo "Setting up Git repository..." || true
 if [ -d "$PROJECT_DIR/.git" ]; then
   cd "$PROJECT_DIR"
   git fetch origin 2>/dev/null
-  git stash 2>/dev/null || echo "No changes to stash"
+  git stash 2>/dev/null || [ "$QUIET" = false ] && echo "No changes to stash" || true
   git pull origin main --rebase || {
     echo -e "${RED}Failed to pull from remote. Resolve conflicts manually.${NC}" | tee -a "$ERROR_LOG"
     exit 1
@@ -64,15 +74,19 @@ fi
 cd "$PROJECT_DIR" || { echo -e "${RED}Failed to cd to $PROJECT_DIR${NC}" | tee -a "$ERROR_LOG"; exit 1; }
 
 # --- Backup Current Project ---
-echo "Backing up existing project..."
+[ "$QUIET" = false ] && echo "Backing up existing project..." || true
 if [ -d "$PROJECT_DIR" ]; then
   tar -czf ~/aim-backend-backup-$(date +%F-%H%M%S).tar.gz -C "$PROJECT_DIR" . 2>/dev/null || {
     echo -e "${RED}Backup failed, proceeding...${NC}" | tee -a "$ERROR_LOG"
   }
 fi
 
+# --- Manage Backup Retention ---
+[ "$QUIET" = false ] && echo "Managing backup retention..." || true
+ls -t ~/aim-backend-backup-*.tar.gz | tail -n +6 | xargs -I {} rm {} 2>/dev/null || true
+
 # --- Preserve MongoDB Data Directory ---
-echo "Preserving MongoDB data directory..."
+[ "$QUIET" = false ] && echo "Preserving MongoDB data directory..." || true
 if [ -d "$DATA_DIR" ]; then
   rm -rf "$BACKUP_DIR" 2>/dev/null
   mkdir -p "$BACKUP_DIR"
@@ -80,28 +94,28 @@ if [ -d "$DATA_DIR" ]; then
     echo -e "${RED}Failed to back up data directory${NC}" | tee -a "$ERROR_LOG"
   }
 else
-  echo "No MongoDB data directory found, skipping backup"
+  [ "$QUIET" = false ] && echo "No MongoDB data directory found, skipping backup" || true
 fi
 
 # --- Create Directory Structure ---
-echo "Creating directory structure..."
+[ "$QUIET" = false ] && echo "Creating directory structure..." || true
 mkdir -p src/@types src/controllers src/middleware src/models src/routes src/utils src/tests data/db
 
 # --- Restore MongoDB Data Directory ---
-echo "Restoring MongoDB data directory..."
+[ "$QUIET" = false ] && echo "Restoring MongoDB data directory..." || true
 if [ -d "$BACKUP_DIR/db" ]; then
   mv "$BACKUP_DIR/db" "$DATA_DIR" && echo "Restored data directory" || {
     echo -e "${RED}Failed to restore data, creating new directory${NC}" | tee -a "$ERROR_LOG"
     mkdir -p "$DATA_DIR"
   }
 else
-  echo "No backup data found, creating new directory..."
+  [ "$QUIET" = false ] && echo "No backup data found, creating new directory..." || true
   mkdir -p "$DATA_DIR"
 fi
 chmod -R 755 "$DATA_DIR" 2>/dev/null || echo -e "${RED}Failed to set permissions${NC}" | tee -a "$ERROR_LOG"
 
 # --- Create .gitignore ---
-echo "Creating .gitignore..."
+[ "$QUIET" = false ] && echo "Creating .gitignore..." || true
 cat > .gitignore << 'EOF'
 node_modules/
 dist/
@@ -111,14 +125,14 @@ data/
 EOF
 
 # --- Create README.md ---
-echo "Creating README.md..."
+[ "$QUIET" = false ] && echo "Creating README.md..." || true
 cat > README.md << 'EOF'
 # AIM Backend
 
 Backend for the AIM Crypto project.
 
 ## Setup
-Run `./rebuild-aim-backend.sh [--no-prompt]` to set up the project.
+Run `./rebuild-aim-backend.sh [--no-prompt] [--quiet]` to set up the project.
 
 ## Run
 - Development: `npm run dev`
@@ -132,7 +146,7 @@ Run `./rebuild-aim-backend.sh [--no-prompt]` to set up the project.
 EOF
 
 # --- Create .env ---
-echo "Creating .env..."
+[ "$QUIET" = false ] && echo "Creating .env..." || true
 cat > .env << EOF
 MONGO_USER=admin
 MONGO_PASSWORD=securepassword
@@ -147,7 +161,7 @@ SECRETS_ID=aim-backend-secrets
 EOF
 
 # --- Create package.json with Corrected Versions ---
-echo "Creating package.json..."
+[ "$QUIET" = false ] && echo "Creating package.json..." || true
 cat > package.json << 'EOF'
 {
   "name": "aim-backend",
@@ -178,7 +192,7 @@ cat > package.json << 'EOF'
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
-    "@types/cookie-parser": "^1.4.7",
+    "@170d5f7types/cookie-parser": "^1.4.7",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/jest": "^29.5.14",
@@ -200,7 +214,7 @@ cat > package.json << 'EOF'
 EOF
 
 # --- Create tsconfig.json ---
-echo "Creating tsconfig.json..."
+[ "$QUIET" = false ] && echo "Creating tsconfig.json..." || true
 cat > tsconfig.json << 'EOF'
 {
   "compilerOptions": {
@@ -220,9 +234,10 @@ cat > tsconfig.json << 'EOF'
 EOF
 
 # --- Create jest.config.mjs ---
-echo "Creating jest.config.mjs..."
+[ "$QUIET" = false ] && echo "Creating jest.config.mjs..." || true
 cat > jest.config.mjs << 'EOF'
-export default {
+require('dotenv').config({ path: '/Users/nathanwilliams/Documents/projects/aim-backend/.env' });
+module.exports = {
   preset: "ts-jest",
   testEnvironment: "node",
   moduleFileExtensions: ["ts", "js", "json"],
@@ -232,7 +247,7 @@ export default {
 EOF
 
 # --- Create src/@types/express.d.ts ---
-echo "Creating src/@types/express.d.ts..."
+[ "$QUIET" = false ] && echo "Creating src/@types/express.d.ts..." || true
 cat > src/@types/express.d.ts << 'EOF'
 import { Request } from 'express';
 declare module 'express-serve-static-core' {
@@ -243,7 +258,7 @@ declare module 'express-serve-static-core' {
 EOF
 
 # --- Create src/server.ts ---
-echo "Creating src/server.ts..."
+[ "$QUIET" = false ] && echo "Creating src/server.ts..." || true
 cat > src/server.ts << 'EOF'
 import dotenv from "dotenv";
 import AWS from "aws-sdk";
@@ -281,7 +296,7 @@ const MONGO_URI = process.env.MONGO_URI || `mongodb://${process.env.MONGO_USER}:
 EOF
 
 # --- Create src/app.ts ---
-echo "Creating src/app.ts..."
+[ "$QUIET" = false ] && echo "Creating src/app.ts..." || true
 cat > src/app.ts << 'EOF'
 import express, { Express } from "express";
 import cors from "cors";
@@ -309,7 +324,7 @@ export default app;
 EOF
 
 # --- Create src/db.ts ---
-echo "Creating src/db.ts..."
+[ "$QUIET" = false ] && echo "Creating src/db.ts..." || true
 cat > src/db.ts << 'EOF'
 import mongoose from "mongoose";
 
@@ -324,7 +339,7 @@ export default connectDB;
 EOF
 
 # --- Create src/controllers/authController.ts ---
-echo "Creating src/controllers/authController.ts..."
+[ "$QUIET" = false ] && echo "Creating src/controllers/authController.ts..." || true
 cat > src/controllers/authController.ts << 'EOF'
 import { Request, Response } from "express";
 import bcrypt from "bcrypt";
@@ -403,7 +418,7 @@ export const verifyTwoFactor = async (req: Request, res: Response) => {
 EOF
 
 # --- Create src/controllers/userController.ts ---
-echo "Creating src/controllers/userController.ts..."
+[ "$QUIET" = false ] && echo "Creating src/controllers/userController.ts..." || true
 cat > src/controllers/userController.ts << 'EOF'
 import { Request, Response } from "express";
 
@@ -413,7 +428,7 @@ export const getProfile = async (req: Request, res: Response) => {
 EOF
 
 # --- Create src/controllers/transactionController.ts ---
-echo "Creating src/controllers/transactionController.ts..."
+[ "$QUIET" = false ] && echo "Creating src/controllers/transactionController.ts..." || true
 cat > src/controllers/transactionController.ts << 'EOF'
 import { Request, Response } from "express";
 import Transaction from "../models/Transaction";
@@ -460,7 +475,7 @@ export const exportTransactions = async (req: Request, res: Response) => {
 EOF
 
 # --- Create src/middleware/authMiddleware.ts ---
-echo "Creating src/middleware/authMiddleware.ts..."
+[ "$QUIET" = false ] && echo "Creating src/middleware/authMiddleware.ts..." || true
 cat > src/middleware/authMiddleware.ts << 'EOF'
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
@@ -482,7 +497,7 @@ export const authenticate = (req: Request, res: Response, next: NextFunction) =>
 EOF
 
 # --- Create src/middleware/validationMiddleware.ts ---
-echo "Creating src/middleware/validationMiddleware.ts..."
+[ "$QUIET" = false ] && echo "Creating src/middleware/validationMiddleware.ts..." || true
 cat > src/middleware/validationMiddleware.ts << 'EOF'
 import { body } from "express-validator";
 
@@ -503,7 +518,7 @@ export const validateTwoFactor = [
 EOF
 
 # --- Create src/models/User.ts ---
-echo "Creating src/models/User.ts..."
+[ "$QUIET" = false ] && echo "Creating src/models/User.ts..." || true
 cat > src/models/User.ts << 'EOF'
 import mongoose, { Schema, Document } from "mongoose";
 
@@ -525,7 +540,7 @@ export default mongoose.model<IUser>("User", userSchema);
 EOF
 
 # --- Create src/models/Transaction.ts ---
-echo "Creating src/models/Transaction.ts..."
+[ "$QUIET" = false ] && echo "Creating src/models/Transaction.ts..." || true
 cat > src/models/Transaction.ts << 'EOF'
 import mongoose, { Schema, Document } from "mongoose";
 
@@ -553,7 +568,7 @@ export default mongoose.model<ITransaction>("Transaction", transactionSchema);
 EOF
 
 # --- Create src/routes/authRoutes.ts ---
-echo "Creating src/routes/authRoutes.ts..."
+[ "$QUIET" = false ] && echo "Creating src/routes/authRoutes.ts..." || true
 cat > src/routes/authRoutes.ts << 'EOF'
 import { Router } from "express";
 import { register, login, setupTwoFactor, verifyTwoFactor } from "../controllers/authController";
@@ -571,7 +586,7 @@ export default router;
 EOF
 
 # --- Create src/routes/userRoutes.ts ---
-echo "Creating src/routes/userRoutes.ts..."
+[ "$QUIET" = false ] && echo "Creating src/routes/userRoutes.ts..." || true
 cat > src/routes/userRoutes.ts << 'EOF'
 import { Router } from "express";
 import { getProfile } from "../controllers/userController";
@@ -585,7 +600,7 @@ export default router;
 EOF
 
 # --- Create src/routes/transactionRoutes.ts ---
-echo "Creating src/routes/transactionRoutes.ts..."
+[ "$QUIET" = false ] && echo "Creating src/routes/transactionRoutes.ts..." || true
 cat > src/routes/transactionRoutes.ts << 'EOF'
 import { Router } from "express";
 import { createTransaction, getTransactions, exportTransactions } from "../controllers/transactionController";
@@ -601,7 +616,7 @@ export default router;
 EOF
 
 # --- Create src/utils/response.ts ---
-echo "Creating src/utils/response.ts..."
+[ "$QUIET" = false ] && echo "Creating src/utils/response.ts..." || true
 cat > src/utils/response.ts << 'EOF'
 import { Response } from "express";
 
@@ -611,7 +626,7 @@ export const sendError = (res: Response, status: number, error: any) => {
 EOF
 
 # --- Create src/swagger.ts ---
-echo "Creating src/swagger.ts..."
+[ "$QUIET" = false ] && echo "Creating src/swagger.ts..." || true
 cat > src/swagger.ts << 'EOF'
 import { Express } from "express";
 import swaggerUi from "swagger-ui-express";
@@ -634,7 +649,7 @@ export const setupSwagger = (app: Express) => {
 EOF
 
 # --- Create src/tests/auth.test.ts ---
-echo "Creating src/tests/auth.test.ts..."
+[ "$QUIET" = false ] && echo "Creating src/tests/auth.test.ts..." || true
 cat > src/tests/auth.test.ts << 'EOF'
 import request from "supertest";
 import app from "../app";
@@ -674,7 +689,7 @@ describe("POST /api/auth/register", () => {
 EOF
 
 # --- Install Dependencies ---
-echo "Installing dependencies..."
+[ "$QUIET" = false ] && echo "Installing dependencies..." || true
 for i in {1..3}; do
   npm install && break || {
     echo -e "${RED}Attempt $i: Failed to install dependencies${NC}" | tee -a "$ERROR_LOG"
@@ -684,7 +699,7 @@ for i in {1..3}; do
 done
 
 # --- Start MongoDB with Retry ---
-echo "Starting MongoDB..."
+[ "$QUIET" = false ] && echo "Starting MongoDB..." || true
 if ! check_mongo_status > /dev/null 2>&1; then
   for i in {1..3}; do
     mongod --dbpath "$DATA_DIR" --auth --logpath "$MONGO_LOG" --quiet --fork && break || {
@@ -693,12 +708,12 @@ if ! check_mongo_status > /dev/null 2>&1; then
       sleep 2
     }
   done
-  sleep 2
+  sleep 5
 fi
 check_mongo_status
 
 # --- Create MongoDB Admin User ---
-echo "Creating MongoDB admin user..."
+[ "$QUIET" = false ] && echo "Creating MongoDB admin user..." || true
 for i in {1..3}; do
   mongosh --host localhost --port 27017 --quiet << 'MONGOSH_EOF' && break
 use admin
@@ -711,18 +726,18 @@ MONGOSH_EOF
 done
 
 # --- Test Compilation ---
-echo "Testing TypeScript compilation..."
+[ "$QUIET" = false ] && echo "Testing TypeScript compilation..." || true
 npx tsc --noEmit || echo -e "${RED}Compilation failed${NC}" | tee -a "$ERROR_LOG"
 
 # --- Commit Changes ---
-echo "Committing changes..."
+[ "$QUIET" = false ] && echo "Committing changes..." || true
 git add .
 git commit -m "Rebuild AIM backend setup" || echo "No changes to commit"
 git push origin main 2>/dev/null || echo -e "${RED}Push failed; resolve manually${NC}" | tee -a "$ERROR_LOG"
 
 # --- Verification ---
 echo -e "${GREEN}Rebuild complete!${NC}"
-echo "Starting verification..."
+[ "$QUIET" = false ] && echo "Starting verification..." || true
 
 # -cleanup-
 echo "Checking for existing server processes on port 5001..."
@@ -741,7 +756,7 @@ if [ -n "$EXISTING_PIDS" ]; then
 else
   echo "No existing server process found on port 5001."
 fi
-echo "Cleanup complete, proceeding to start server..."
+echo "Cleanup complete, proceeding to start server..." >> "$VERIFICATION_LOG"
 
 # Ensure .env exists
 if [ ! -f "$PROJECT_DIR/.env" ]; then
@@ -752,38 +767,49 @@ fi
 # Source .env
 export $(cat "$PROJECT_DIR/.env" | xargs)
 
+# Validate .env variables
+echo "Validating .env variables..." >> "$VERIFICATION_LOG"
+REQUIRED_VARS=("MONGO_URI" "JWT_SECRET" "PORT")
+for var in "${REQUIRED_VARS[@]}"; do
+  if [ -z "${!var}" ]; then
+    echo -e "${RED}Error: $var is not set in .env${NC}" | tee -a "$ERROR_LOG"
+    exit 1
+  fi
+done
+
 # Start Server
-echo "Starting server..."
+[ "$QUIET" = false ] && echo "Starting server..." || true
 cd "$PROJECT_DIR" && export $(cat ./.env | xargs) && node -r dotenv/config node_modules/.bin/tsx src/server.ts > "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 sleep 10
 if ps -p $SERVER_PID > /dev/null; then
-  echo "Server started (PID: $SERVER_PID)"
+  [ "$QUIET" = false ] && echo "Server started (PID: $SERVER_PID)" || true
 else
   echo -e "${RED}Server failed to start${NC}" | tee -a "$ERROR_LOG"
-  cat "$SERVER_LOG"
+  cat "$SERVER_LOG" | tee -a "$VERIFICATION_LOG"
+  exit 1
 fi
 
 # Debug: Check port binding and server logs
-echo "Debug: Checking server port binding..."
-lsof -i :5001 || echo "No process listening on port 5001"
-echo "Debug: Server log contents..."
-cat "$SERVER_LOG" || echo "No server log available"
+[ "$QUIET" = false ] && echo "Debug: Checking server port binding..." || true
+lsof -i :5001 >> "$VERIFICATION_LOG" || echo "No process listening on port 5001" >> "$VERIFICATION_LOG"
+[ "$QUIET" = false ] && echo "Debug: Server log contents..." || true
+cat "$SERVER_LOG" >> "$VERIFICATION_LOG" || echo "No server log available" >> "$VERIFICATION_LOG"
 
 # Test Register Endpoint
-echo "Testing register endpoint..."
+[ "$QUIET" = false ] && echo "Testing register endpoint..." || true
 for i in {1..3}; do
   REGISTER_OUTPUT=$(curl -s -i --max-time 10 -X POST http://localhost:5001/api/auth/register -H "Content-Type: application/json" -d '{"email":"test@example.com","password":"password123"}' || true)
-  echo "Debug: Register endpoint response: $REGISTER_OUTPUT"
+  echo "Debug: Register endpoint response: $REGISTER_OUTPUT" >> "$VERIFICATION_LOG"
   if echo "$REGISTER_OUTPUT" | grep -q "Registration successful"; then
-    echo -e "${GREEN}Register endpoint passed${NC}"
+    [ "$QUIET" = false ] && echo -e "${GREEN}Register endpoint passed${NC}" || true
     TOKEN=$(echo "$REGISTER_OUTPUT" | grep -i 'set-cookie: token=' | sed -n 's/.*token=\([^;]*\).*/\1/p' || echo "$REGISTER_OUTPUT" | grep -o '"token":"[^"]*"' | sed 's/"token":"\(.*\)"/\1/' || echo "")
     if [ -z "$TOKEN" ]; then
-      echo "Debug: No token found in Set-Cookie header or JSON response"
+      echo "Debug: No token found in Set-Cookie header or JSON response" >> "$VERIFICATION_LOG"
     fi
     break
   fi
-  echo "Attempt $i: Register endpoint failed, retrying..."
+  echo "Attempt $i: Register endpoint failed, retrying..." | tee -a "$VERIFICATION_LOG"
   sleep 2
 done
 if ! echo "$REGISTER_OUTPUT" | grep -q "Registration successful"; then
@@ -792,25 +818,25 @@ fi
 
 # Test Profile Endpoint
 if [ -n "$TOKEN" ]; then
-  echo "Testing profile endpoint..."
+  [ "$QUIET" = false ] && echo "Testing profile endpoint..." || true
   PROFILE_OUTPUT=$(curl -s --max-time 10 http://localhost:5001/api/user/profile -H "Cookie: token=$TOKEN" || true)
   if echo "$PROFILE_OUTPUT" | grep -q "User profile"; then
-    echo -e "${GREEN}Profile endpoint passed${NC}"
+    [ "$QUIET" = false ] && echo -e "${GREEN}Profile endpoint passed${NC}" || true
   else
     echo -e "${RED}Profile endpoint failed: $PROFILE_OUTPUT${NC}" | tee -a "$ERROR_LOG"
   fi
 else
-  echo "Skipping profile endpoint test: No token available."
+  [ "$QUIET" = false ] && echo "Skipping profile endpoint test: No token available." || true
 fi
 
 # Stop Server
-echo "Stopping server..."
-kill $SERVER_PID 2>/dev/null && echo "Server stopped" || echo "Server already stopped"
+[ "$QUIET" = false ] && echo "Stopping server..." || true
+kill $SERVER_PID 2>/dev/null && echo "Server stopped" | tee -a "$VERIFICATION_LOG" || echo "Server already stopped" | tee -a "$VERIFICATION_LOG"
 wait $SERVER_PID 2>/dev/null || true
 
 # Run Tests
-echo "Running Jest tests..."
-cd "$PROJECT_DIR" && export $(cat ./.env | xargs) && npx jest && echo -e "${GREEN}Tests passed${NC}" || echo -e "${RED}Tests failed${NC}" | tee -a "$ERROR_LOG" || true
+[ "$QUIET" = false ] && echo "Running Jest tests..." || true
+cd "$PROJECT_DIR" && export $(cat ./.env | xargs) && npx jest && echo -e "${GREEN}Tests passed${NC}" | tee -a "$VERIFICATION_LOG" || echo -e "${RED}Tests failed${NC}" | tee -a "$ERROR_LOG" || true
 
 # Prompt for Pushing Changes
 if [ "$NO_PROMPT" = true ]; then
@@ -820,16 +846,22 @@ else
 fi
 
 if [ "$push_choice" = "y" ] || [ "$push_choice" = "Y" ]; then
-  echo "Pushing changes to remote repository..."
-  git add . && git commit -m "Verified setup" || echo "No changes to commit"
+  [ "$QUIET" = false ] && echo "Pushing changes to remote repository..." || true
+  git add . && git commit -m "Verified setup" || echo "No changes to commit" | tee -a "$VERIFICATION_LOG"
   git push origin main || echo -e "${RED}Push failed${NC}" | tee -a "$ERROR_LOG"
 else
-  echo "Skipping push to remote repository."
+  [ "$QUIET" = false ] && echo "Skipping push to remote repository." || true
 fi
+
+# --- Clean Up Lingering Processes ---
+[ "$QUIET" = false ] && echo "Ensuring no lingering processes..." || true
+pgrep -f "mongod --dbpath $DATA_DIR" | xargs kill -9 2>/dev/null || true
+pgrep -f "tsx src/server.ts" | xargs kill -9 2>/dev/null || true
 
 # --- Final Messages ---
 echo -e "${GREEN}Script complete!${NC}"
 [ -f "$ERROR_LOG" ] && echo "Check $ERROR_LOG for errors"
+[ -f "$VERIFICATION_LOG" ] && echo "Verification logs saved to $VERIFICATION_LOG"
 echo "Start server: cd $PROJECT_DIR && npx tsx src/server.ts"
 echo "API Docs: http://localhost:5001/api-docs"
-echo "Use '--no-prompt' flag to skip interactive prompts"
+echo "Use '--no-prompt' or '--quiet' flags for automation"
