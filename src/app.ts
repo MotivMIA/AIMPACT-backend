@@ -7,6 +7,7 @@ import userRoutes from "./routes/userRoutes";
 import transactionRoutes from "./routes/transactionRoutes";
 import healthRoutes from "./routes/healthRoutes";
 import { metricsMiddleware, setupMetrics } from "./middleware/metricsMiddleware";
+import { loggerMiddleware } from "./middleware/loggerMiddleware";
 import { setupSwagger } from "./swagger";
 
 const app: Express = express();
@@ -16,6 +17,7 @@ app.use(cors({ origin: process.env.FRONTEND_URL || "http://localhost:5173", cred
 app.use(express.json());
 app.use(cookieParser());
 app.use(metricsMiddleware);
+app.use(loggerMiddleware);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);

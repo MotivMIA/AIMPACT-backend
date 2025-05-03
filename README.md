@@ -20,3 +20,4 @@ Run `./deploy.sh` with `deploy.env` configured for Docker Hub and Render.
 - Rate Limiting
 - MongoDB with AWS Secrets Manager
 - Prometheus Metrics
+- Request Logging

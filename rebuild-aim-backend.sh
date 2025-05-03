@@ -103,7 +103,7 @@ fi
 
 # --- Create Directory Structure ---
 [ "$QUIET" = false ] && echo "Creating directory structure..." || true
-mkdir -p src/@types src/controllers src/middleware src/models src/routes src/utils src/tests data/db
+mkdir -p src/@types src/controllers src/middleware src/models src/routes src/utils src/tests data/db logs
 
 # --- Restore MongoDB Data Directory ---
 [ "$QUIET" = false ] && echo "Restoring MongoDB data directory..." || true
@@ -127,6 +127,7 @@ dist/
 deploy.env
 *.log
 data/
+logs/
 EOF
 
 # --- Create README.md ---
@@ -141,9 +142,9 @@ Run `./rebuild-aim-backend.sh [--no-prompt] [--quiet] [--build]` to set up the p
 
 ## Run
 - Development: `npm run dev`
-- API Docs: `http://localhost:5001/api-docs`
-- Health Check: `http://localhost:5001/api/health`
-- Metrics: `http://localhost:5001/metrics`
+- API Docs: `http://localhost:5001/api/v1/docs`
+- Health Check: `http://localhost:5001/api/v1/health`
+- Metrics: `http://localhost:5001/api/v1/metrics`
 
 ## Deployment
 Run `./deploy.sh` with `deploy.env` configured for Docker Hub and Render.
@@ -155,6 +156,7 @@ Run `./deploy.sh` with `deploy.env` configured for Docker Hub and Render.
 - MongoDB with AWS Secrets Manager
 - Prometheus Metrics
 - Request Logging
+- API Versioning (v1)
 EOF
 
 # --- Create .env ---
@@ -216,7 +218,6 @@ cat > package.json << 'EOF'
     "@types/supertest": "^6.0.2",
     "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.6",
-    "@types/winston": "^2.4.4",
     "jest": "^29.7.0",
     "mongodb-memory-server": "^10.1.4",
     "rimraf": "^6.0.1",
@@ -365,6 +366,7 @@ import transactionRoutes from "./routes/transactionRoutes";
 import healthRoutes from "./routes/healthRoutes";
 import { metricsMiddleware, setupMetrics } from "./middleware/metricsMiddleware";
 import { loggerMiddleware } from "./middleware/loggerMiddleware";
+import { errorMiddleware } from "./middleware/errorMiddleware";
 import { setupSwagger } from "./swagger";
 
 const app: Express = express();
@@ -376,13 +378,14 @@ app.use(cookieParser());
 app.use(metricsMiddleware);
 app.use(loggerMiddleware);
 
-app.use("/api/auth", authRoutes);
-app.use("/api/user", userRoutes);
-app.use("/api/transactions", transactionRoutes);
-app.use("/api", healthRoutes);
+app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/user", userRoutes);
+app.use("/api/v1/transactions", transactionRoutes);
+app.use("/api/v1", healthRoutes);
 
 setupSwagger(app);
 setupMetrics(app);
+app.use(errorMiddleware);
 
 export default app;
 EOF
@@ -589,7 +592,7 @@ EOF
 # --- Create src/middleware/metricsMiddleware.ts ---
 [ "$QUIET" = false ] && echo "Creating src/middleware/metricsMiddleware.ts..." || true
 cat > src/middleware/metricsMiddleware.ts << 'EOF'
-import { Request, Response, NextFunction } from "express";
+import { Express, Request, Response, NextFunction } from "express";
 import client from "prom-client";
 
 const httpRequestDuration = new client.Histogram({
@@ -618,7 +621,7 @@ export const metricsMiddleware = (req: Request, res: Response, next: NextFunctio
 
 export const setupMetrics = (app: Express) => {
   client.collectDefaultMetrics();
-  app.get("/metrics", async (req, res) => {
+  app.get("/api/v1/metrics", async (req: Request, res: Response) => {
     res.set("Content-Type", client.register.contentType);
     res.end(await client.register.metrics());
   });
@@ -656,6 +659,36 @@ export const loggerMiddleware = (req: Request, res: Response, next: NextFunction
     });
   });
   next();
+};
+EOF
+
+# --- Create src/middleware/errorMiddleware.ts ---
+[ "$QUIET" = false ] && echo "Creating src/middleware/errorMiddleware.ts..." || true
+cat > src/middleware/errorMiddleware.ts << 'EOF'
+import { Request, Response, NextFunction } from "express";
+import winston from "winston";
+
+const logger = winston.createLogger({
+  level: 'error',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.File({ filename: 'logs/error.log' }),
+    new winston.transports.Console()
+  ]
+});
+
+export const errorMiddleware = (err: Error, req: Request, res: Response, next: NextFunction) => {
+  logger.error({
+    message: err.message,
+    stack: err.stack,
+    method: req.method,
+    url: req.url,
+    ip: req.ip
+  });
+  res.status(500).json({ message: "Internal server error" });
 };
 EOF
 
@@ -793,7 +826,7 @@ const options = {
   definition: {
     openapi: "3.0.0",
     info: { title: "AIM Backend API", version: "1.0.0", description: "API for AIM Crypto" },
-    servers: [{ url: "http://localhost:5001" }]
+    servers: [{ url: "http://localhost:5001/api/v1" }]
   },
   apis: ["./src/routes/*.ts", "./src/controllers/*.ts"]
 };
@@ -801,7 +834,7 @@ const options = {
 const specs = swaggerJsdoc(options);
 
 export const setupSwagger = (app: Express) => {
-  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
+  app.use("/api/v1/docs", swaggerUi.serve, swaggerUi.setup(specs));
 };
 EOF
 
@@ -825,10 +858,10 @@ afterAll(async () => {
   await mongoServer.stop();
 });
 
-describe("POST /api/auth/register", () => {
+describe("POST /api/v1/auth/register", () => {
   it("should register a new user", async () => {
     const res = await request(app)
-      .post("/api/auth/register")
+      .post("/api/v1/auth/register")
       .send({ email: "test@example.com", password: "password123" });
     expect(res.status).toBe(201);
     expect(res.body.message).toBe("Registration successful");
@@ -837,7 +870,7 @@ describe("POST /api/auth/register", () => {
 
   it("should fail if email is invalid", async () => {
     const res = await request(app)
-      .post("/api/auth/register")
+      .post("/api/v1/auth/register")
       .send({ email: "invalid", password: "password123" });
     expect(res.status).toBe(400);
     expect(res.body.message).toBe("Invalid email");
@@ -871,10 +904,10 @@ afterAll(async () => {
   await mongoServer.stop();
 });
 
-describe("POST /api/transactions", () => {
+describe("POST /api/v1/transactions", () => {
   it("should create a transaction", async () => {
     const res = await request(app)
-      .post("/api/transactions")
+      .post("/api/v1/transactions")
       .set("Cookie", `token=${token}`)
       .send({ amount: 100, type: "deposit", category: "test", description: "Test transaction" });
     expect(res.status).toBe(201);
@@ -883,7 +916,7 @@ describe("POST /api/transactions", () => {
 
   it("should fail if amount is missing", async () => {
     const res = await request(app)
-      .post("/api/transactions")
+      .post("/api/v1/transactions")
       .set("Cookie", `token=${token}`)
       .send({ type: "deposit", category: "test", description: "Test transaction" });
     expect(res.status).toBe(400);
@@ -1034,7 +1067,7 @@ cat "$SERVER_LOG" >> "$VERIFICATION_LOG" || echo "No server log available" >> "$
 # Test Register Endpoint
 [ "$QUIET" = false ] && echo "Testing register endpoint..." || true
 for i in {1..3}; do
-  REGISTER_OUTPUT=$(curl -s -i --max-time 10 -X POST http://localhost:5001/api/auth/register -H "Content-Type: application/json" -d '{"email":"test@example.com","password":"password123"}' || true)
+  REGISTER_OUTPUT=$(curl -s -i --max-time 10 -X POST http://localhost:5001/api/v1/auth/register -H "Content-Type: application/json" -d '{"email":"test@example.com","password":"password123"}' || true)
   echo "Debug: Register endpoint response: $REGISTER_OUTPUT" >> "$VERIFICATION_LOG"
   if echo "$REGISTER_OUTPUT" | grep -q "Registration successful"; then
     [ "$QUIET" = false ] && echo -e "${GREEN}Register endpoint passed${NC}" || true
@@ -1054,7 +1087,7 @@ fi
 # Test Profile Endpoint
 if [ -n "$TOKEN" ]; then
   [ "$QUIET" = false ] && echo "Testing profile endpoint..." || true
-  PROFILE_OUTPUT=$(curl -s --max-time 10 http://localhost:5001/api/user/profile -H "Cookie: token=$TOKEN" || true)
+  PROFILE_OUTPUT=$(curl -s --max-time 10 http://localhost:5001/api/v1/user/profile -H "Cookie: token=$TOKEN" || true)
   if echo "$PROFILE_OUTPUT" | grep -q "User profile"; then
     [ "$QUIET" = false ] && echo -e "${GREEN}Profile endpoint passed${NC}" || true
   else
@@ -1066,7 +1099,7 @@ fi
 
 # Test Health Endpoint
 [ "$QUIET" = false ] && echo "Testing health endpoint..." || true
-HEALTH_OUTPUT=$(curl -s --max-time 10 http://localhost:5001/api/health || true)
+HEALTH_OUTPUT=$(curl -s --max-time 10 http://localhost:5001/api/v1/health || true)
 if echo "$HEALTH_OUTPUT" | grep -q "OK"; then
   [ "$QUIET" = false ] && echo -e "${GREEN}Health endpoint passed${NC}" || true
 else
@@ -1106,5 +1139,5 @@ echo -e "${GREEN}Script complete!${NC}"
 [ -f "$ERROR_LOG" ] && echo "Check $ERROR_LOG for errors"
 [ -f "$VERIFICATION_LOG" ] && echo "Verification logs saved to $VERIFICATION_LOG"
 echo "Start server: cd $PROJECT_DIR && npx tsx src/server.ts"
-echo "API Docs: http://localhost:5001/api-docs"
+echo "API Docs: http://localhost:5001/api/v1/docs"
 echo "Use '--no-prompt', '--quiet', or '--build' flags for automation"
