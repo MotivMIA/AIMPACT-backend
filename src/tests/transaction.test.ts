@@ -5,12 +5,14 @@ import { MongoMemoryServer } from "mongodb-memory-server";
 import jwt from "jsonwebtoken";
 import User from "../models/User";
 import Transaction from "../models/Transaction";
+import { WebSocketServer } from "ws";
 
 jest.mock("ws");
 
 let mongoServer: MongoMemoryServer;
 let token: string;
 let transactionId: string;
+let mockSend: jest.Mock;
 
 beforeAll(async () => {
   mongoServer = await MongoMemoryServer.create();
@@ -23,7 +25,10 @@ beforeAll(async () => {
   transactionId = transaction._id.toString();
 
   // Mock WebSocketServer
-  const mockWss = { clients: new Set([{ readyState: 1, send: jest.fn() }]) };
+  mockSend = jest.fn();
+  const mockClient = { readyState: WebSocketServer.OPEN, send: mockSend };
+  const mockClients = new Set([mockClient]);
+  const mockWss = { clients: mockClients } as unknown as WebSocketServer;
   app.set('wss', mockWss);
 });
 
@@ -92,7 +97,7 @@ describe("PATCH /api/v1/transactions/status", () => {
     expect(res.status).toBe(200);
     expect(res.body.message).toBe("Transaction status updated");
     expect(res.body.transaction.status).toBe("Completed");
-    expect(app.get('wss').clients.values().next().value.send).toHaveBeenCalled();
+    expect(mockSend).toHaveBeenCalledWith(expect.stringContaining('"type":"transactionUpdate"'));
   });
 
   it("should fail if status is invalid", async () => {
