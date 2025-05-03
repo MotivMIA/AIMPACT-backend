@@ -36,6 +36,12 @@ fi
 pgrep -f "mongod --dbpath $DATA_DIR" | xargs kill -9 2>/dev/null || true
 pgrep -f "tsx src/server.ts" | xargs kill -9 2>/dev/null || true
 
+# --- Ensure mongosh is installed ---
+if ! command -v mongosh &> /dev/null; then
+  echo -e "${RED}Error: mongosh is not installed or not in PATH.${NC}" | tee -a "$ERROR_LOG"
+  exit 1
+fi
+
 # --- Function to Check MongoDB Status ---
 check_mongo_status() {
   local pid=$(pgrep mongod 2>/dev/null)
