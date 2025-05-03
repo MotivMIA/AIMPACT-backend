@@ -810,7 +810,9 @@ const userSchema: Schema = new Schema({
 export default mongoose.model<IUser>("User", userSchema);
 EOF
 
-# --- Create src/models/Transaction.ts ---
+# --- Create src/models/Transaction
+
+System: .ts ---
 [ "$QUIET" = false ] && echo "Creating src/models/Transaction.ts..." || true
 cat > src/models/Transaction.ts << 'EOF'
 import mongoose, { Schema, Document } from "mongoose";
@@ -986,12 +988,14 @@ import { MongoMemoryServer } from "mongodb-memory-server";
 import jwt from "jsonwebtoken";
 import User from "../models/User";
 import Transaction from "../models/Transaction";
+import { WebSocketServer } from "ws";
 
 jest.mock("ws");
 
 let mongoServer: MongoMemoryServer;
 let token: string;
 let transactionId: string;
+let mockSend: jest.Mock;
 
 beforeAll(async () => {
   mongoServer = await MongoMemoryServer.create();
@@ -1004,7 +1008,10 @@ beforeAll(async () => {
   transactionId = transaction._id.toString();
 
   // Mock WebSocketServer
-  const mockWss = { clients: new Set([{ readyState: 1, send: jest.fn() }]) };
+  mockSend = jest.fn();
+  const mockClient = { readyState: WebSocketServer.OPEN, send: mockSend };
+  const mockClients = new Set([mockClient]);
+  const mockWss = { clients: mockClients } as unknown as WebSocketServer;
   app.set('wss', mockWss);
 });
 
@@ -1073,7 +1080,7 @@ describe("PATCH /api/v1/transactions/status", () => {
     expect(res.status).toBe(200);
     expect(res.body.message).toBe("Transaction status updated");
     expect(res.body.transaction.status).toBe("Completed");
-    expect(app.get('wss').clients.values().next().value.send).toHaveBeenCalled();
+    expect(mockSend).toHaveBeenCalledWith(expect.stringContaining('"type":"transactionUpdate"'));
   });
 
   it("should fail if status is invalid", async () => {
@@ -1091,7 +1098,8 @@ EOF
 [ "$QUIET" = false ] && echo "Creating src/tests/websocket.test.ts..." || true
 cat > src/tests/websocket.test.ts << 'EOF'
 import { WebSocket, WebSocketServer } from "ws";
-import { createServer, Server, AddressInfo } from "http";
+import { createServer, Server } from "http";
+import { AddressInfo } from "net";
 import app from "../app";
 import { setupWebSocket } from "../websocket";
 
@@ -1116,7 +1124,7 @@ describe("WebSocket", () => {
       done(new Error("Server address is invalid or not an AddressInfo object"));
       return;
     }
-    const ws = new WebSocket(`ws://localhost:${address.port}`);
+    const ws = new WebSocket(`ws://localhost:${(address as AddressInfo).port}`);
     ws.on("open", () => {
       ws.on("message", (data) => {
         expect(JSON.parse(data.toString())).toEqual({ message: "Connected to WebSocket" });
