@@ -1,7 +1,9 @@
 import { Request, Response } from "express";
+import { WebSocketServer } from "ws";
 import Transaction from "../models/Transaction";
 import { sendError } from "../utils/response";
 import { validationResult } from "express-validator";
+import { broadcastTransactionUpdate } from "../websocket";
 
 export const createTransaction = async (req: Request, res: Response) => {
   const errors = validationResult(req);
@@ -32,11 +34,30 @@ export const getTransactions = async (req: Request, res: Response) => {
   res.json({ transactions });
 };
 
+export const updateTransactionStatus = async (req: Request, res: Response) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return sendError(res, 400, { message: errors.array()[0].msg });
+
+  const { userId } = req.user!;
+  const { transactionId, status } = req.body;
+
+  const transaction = await Transaction.findOne({ _id: transactionId, userId });
+  if (!transaction) return sendError(res, 404, { message: "Transaction not found" });
+
+  transaction.status = status;
+  await transaction.save();
+  
+  const wss = (req.app.get('wss') as WebSocketServer);
+  broadcastTransactionUpdate(wss, transaction);
+
+  res.json({ message: "Transaction status updated", transaction });
+};
+
 export const exportTransactions = async (req: Request, res: Response) => {
   const { userId } = req.user!;
   const transactions = await Transaction.find({ userId }).lean();
-  const csv = transactions.map(t => `${t.date.toISOString()},${t.type},${t.amount},${t.category || ''},${t.status},${t.description || ''}`).join('\n');
+  const csv = transactions.map(t => \`${t.date.toISOString()},${t.type},${t.amount},${t.category || ''},${t.status},${t.description || ''}\`).join('\n');
   res.header('Content-Type', 'text/csv');
   res.attachment('transactions.csv');
-  res.send(`Date,Type,Amount,Category,Status,Description\n${csv}`);
+  res.send(\`Date,Type,Amount,Category,Status,Description\n${csv}\`);
 };

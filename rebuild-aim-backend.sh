@@ -597,10 +597,10 @@ export const updateTransactionStatus = async (req: Request, res: Response) => {
 export const exportTransactions = async (req: Request, res: Response) => {
   const { userId } = req.user!;
   const transactions = await Transaction.find({ userId }).lean();
-  const csv = transactions.map(t => \`${t.date.toISOString()},${t.type},${t.amount},${t.category || ''},${t.status},${t.description || ''}\`).join('\n');
+  const csv = transactions.map(t => `${t.date.toISOString()},${t.type},${t.amount},${t.category || ''},${t.status},${t.description || ''}`).join('\n');
   res.header('Content-Type', 'text/csv');
   res.attachment('transactions.csv');
-  res.send(\`Date,Type,Amount,Category,Status,Description\n${csv}\`);
+  res.send(`Date,Type,Amount,Category,Status,Description\n${csv}`);
 };
 EOF
 
@@ -647,7 +647,7 @@ export const validateTwoFactor = [
 ];
 
 export const validateTransaction = [
-  body("amount").isNumeric().withMessage("Amount must be a number"),
+  body("amount").isNumeric().withMessage("Amount must be a number").custom(value => value > 0).withMessage("Amount must be positive"),
   body("type").isIn(["deposit", "withdrawal"]).withMessage("Type must be 'deposit' or 'withdrawal'")
 ];
 
@@ -722,7 +722,7 @@ export const loggerMiddleware = (req: Request, res: Response, next: NextFunction
       method: req.method,
       url: req.originalUrl || req.url,
       status: res.statusCode,
-      duration: \`${duration}ms\`,
+      duration: `${duration}ms`,
       ip: req.ip
     });
   });
@@ -997,6 +997,15 @@ describe("POST /api/v1/transactions", () => {
     expect(res.body.message).toBe("Amount must be a number");
   });
 
+  it("should fail if amount is negative", async () => {
+    const res = await request(app)
+      .post("/api/v1/transactions")
+      .set("Cookie", `token=${token}`)
+      .send({ amount: -100, type: "deposit", category: "test", description: "Test transaction" });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe("Amount must be positive");
+  });
+
   it("should fail if type is invalid", async () => {
     const res = await request(app)
       .post("/api/v1/transactions")
@@ -1207,7 +1216,7 @@ fi
 [ "$QUIET" = false ] && echo "Testing health endpoint..." || true
 HEALTH_OUTPUT=$(curl -s --max-time 10 http://localhost:5001/api/v1/health || true)
 if echo "$HEALTH_OUTPUT" | grep -q "OK"; then
-  [ "$QUIET" = false ] && echo -e "${GREEN}Health endpoint passed${NC}" | true
+  [ "$QUIET" = false ] && echo -e "${GREEN}Health endpoint passed${NC}" || true
 else
   echo -e "${RED}Health endpoint failed: $HEALTH_OUTPUT${NC}" | tee -a "$ERROR_LOG"
 fi
@@ -1260,4 +1269,8 @@ pgrep -f "tsx src/server.ts" | xargs kill -9 2>/dev/null || true
 
 # --- Final Messages ---
 echo -e "${GREEN}Script complete!${NC}"
-[ -f "$ERROR_LOG" ] && echo
+[ -f "$ERROR_LOG" ] && echo "Check $ERROR_LOG for errors"
+[ -f "$VERIFICATION_LOG" ] && echo "Verification logs saved to $VERIFICATION_LOG"
+echo "Start server: cd $PROJECT_DIR && npx tsx src/server.ts"
+echo "API Docs: http://localhost:5001/api/v1/docs"
+echo "Use '--no-prompt', '--quiet', or '--build' flags for automation"

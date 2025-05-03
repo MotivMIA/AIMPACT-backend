@@ -1,7 +1,9 @@
 import dotenv from "dotenv";
 import AWS from "aws-sdk";
+import { createServer } from "http";
 import app from "./app";
 import connectDB from "./db";
+import { setupWebSocket } from "./websocket";
 
 dotenv.config();
 
@@ -26,7 +28,10 @@ const MONGO_URI = process.env.MONGO_URI || `mongodb://${process.env.MONGO_USER}:
   await getSecrets();
   if (!MONGO_URI) throw new Error("MongoDB URI not provided");
   await connectDB();
-  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+  const server = createServer(app);
+  const wss = setupWebSocket(server);
+  app.set('wss', wss);
+  server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 })().catch(err => {
   console.error("Startup failed:", err);
   process.exit(1);

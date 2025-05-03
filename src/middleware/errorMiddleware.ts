@@ -18,7 +18,7 @@ export const errorMiddleware = (err: Error, req: Request, res: Response, next: N
     message: err.message,
     stack: err.stack,
     method: req.method,
-    url: req.url,
+    url: req.originalUrl || req.url,
     ip: req.ip
   });
   res.status(500).json({ message: "Internal server error" });

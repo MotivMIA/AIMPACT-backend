@@ -19,3 +19,8 @@ export const validateTransaction = [
   body("amount").isNumeric().withMessage("Amount must be a number"),
   body("type").isIn(["deposit", "withdrawal"]).withMessage("Type must be 'deposit' or 'withdrawal'")
 ];
+
+export const validateTransactionStatus = [
+  body("transactionId").notEmpty().withMessage("Transaction ID required"),
+  body("status").isIn(["Pending", "Completed", "Failed"]).withMessage("Status must be 'Pending', 'Completed', or 'Failed'")
+];

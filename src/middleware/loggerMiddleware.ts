@@ -19,9 +19,9 @@ export const loggerMiddleware = (req: Request, res: Response, next: NextFunction
     const duration = Date.now() - start;
     logger.info({
       method: req.method,
-      url: req.url,
+      url: req.originalUrl || req.url,
       status: res.statusCode,
-      duration: `${duration}ms`,
+      duration: \`${duration}ms\`,
       ip: req.ip
     });
   });

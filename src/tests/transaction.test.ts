@@ -4,9 +4,11 @@ import mongoose from "mongoose";
 import { MongoMemoryServer } from "mongodb-memory-server";
 import jwt from "jsonwebtoken";
 import User from "../models/User";
+import Transaction from "../models/Transaction";
 
 let mongoServer: MongoMemoryServer;
 let token: string;
+let transactionId: string;
 
 beforeAll(async () => {
   mongoServer = await MongoMemoryServer.create();
@@ -14,6 +16,9 @@ beforeAll(async () => {
   const user = new User({ email: "test@example.com", password: "hashed" });
   await user.save();
   token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET!, { expiresIn: "1h" });
+  const transaction = new Transaction({ userId: user._id, amount: 100, type: "deposit", status: "Pending" });
+  await transaction.save();
+  transactionId = transaction._id.toString();
 });
 
 afterAll(async () => {
@@ -47,5 +52,26 @@ describe("POST /api/v1/transactions", () => {
       .send({ amount: 100, type: "invalid", category: "test", description: "Test transaction" });
     expect(res.status).toBe(400);
     expect(res.body.message).toBe("Type must be 'deposit' or 'withdrawal'");
+  });
+});
+
+describe("PATCH /api/v1/transactions/status", () => {
+  it("should update transaction status", async () => {
+    const res = await request(app)
+      .patch("/api/v1/transactions/status")
+      .set("Cookie", `token=${token}`)
+      .send({ transactionId, status: "Completed" });
+    expect(res.status).toBe(200);
+    expect(res.body.message).toBe("Transaction status updated");
+    expect(res.body.transaction.status).toBe("Completed");
+  });
+
+  it("should fail if status is invalid", async () => {
+    const res = await request(app)
+      .patch("/api/v1/transactions/status")
+      .set("Cookie", `token=${token}`)
+      .send({ transactionId, status: "Invalid" });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe("Status must be 'Pending', 'Completed', or 'Failed'");
   });
 });
