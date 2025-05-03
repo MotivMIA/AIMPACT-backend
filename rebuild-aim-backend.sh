@@ -152,7 +152,7 @@ Run `./deploy.sh` with `deploy.env` configured for Docker Hub and Render.
 ## Features
 - JWT & 2FA Authentication
 - Transaction Management
-- Rate Limiting
+- Configurable Rate Limiting
 - MongoDB with AWS Secrets Manager
 - Prometheus Metrics
 - Request Logging
@@ -167,11 +167,13 @@ MONGO_PASSWORD=securepassword
 MONGO_HOST=localhost:27017
 MONGO_DB=aim-backend
 MONGO_URI=mongodb://admin:securepassword@localhost:27017/aim-backend?authSource=admin
-JWT_SECRET=$(openssl rand -base64 48)
+JWT_SECRET=$(openssl rand -hex 32)
 PORT=5001
 FRONTEND_URL=http://localhost:5173
 AWS_REGION=us-east-1
 SECRETS_ID=aim-backend-secrets
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX=100
 EOF
 
 # --- Create package.json with Corrected Versions ---
@@ -371,7 +373,10 @@ import { setupSwagger } from "./swagger";
 
 const app: Express = express();
 
-app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
+app.use(rateLimit({
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS!) || 15 * 60 * 1000,
+  max: parseInt(process.env.RATE_LIMIT_MAX!) || 100
+}));
 app.use(cors({ origin: process.env.FRONTEND_URL || "http://localhost:5173", credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
@@ -585,7 +590,7 @@ export const validateTwoFactor = [
 
 export const validateTransaction = [
   body("amount").isNumeric().withMessage("Amount must be a number"),
-  body("type").notEmpty().withMessage("Type is required")
+  body("type").isIn(["deposit", "withdrawal"]).withMessage("Type must be 'deposit' or 'withdrawal'")
 ];
 EOF
 
@@ -733,7 +738,7 @@ const transactionSchema: Schema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
   amount: { type: Number, required: true },
   type: { type: String, required: true },
-  date: { type: Date, default: Date.now },
+  date: { type: Date, Fdefault: Date.now },
   category: { type: String },
   status: { type: String, default: "Pending" },
   description: { type: String }
@@ -922,6 +927,15 @@ describe("POST /api/v1/transactions", () => {
     expect(res.status).toBe(400);
     expect(res.body.message).toBe("Amount must be a number");
   });
+
+  it("should fail if type is invalid", async () => {
+    const res = await request(app)
+      .post("/api/v1/transactions")
+      .set("Cookie", `token=${token}`)
+      .send({ amount: 100, type: "invalid", category: "test", description: "Test transaction" });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe("Type must be 'deposit' or 'withdrawal'");
+  });
 });
 EOF
 
@@ -1031,8 +1045,10 @@ if [ ! -f "$PROJECT_DIR/.env" ]; then
   exit 1
 fi
 
-# Source .env
-export $(cat "$PROJECT_DIR/.env" | xargs)
+# Source .env safely
+set -a
+source "$PROJECT_DIR/.env"
+set +a
 
 # Validate .env variables
 echo "Validating .env variables..." >> "$VERIFICATION_LOG"
@@ -1046,7 +1062,7 @@ done
 
 # Start Server
 [ "$QUIET" = false ] && echo "Starting server..." || true
-cd "$PROJECT_DIR" && export $(cat ./.env | xargs) && node -r dotenv/config node_modules/.bin/tsx src/server.ts > "$SERVER_LOG" 2>&1 &
+cd "$PROJECT_DIR" && node -r dotenv/config node_modules/.bin/tsx src/server.ts > "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 disown $SERVER_PID
 sleep 10
@@ -1112,7 +1128,7 @@ kill $SERVER_PID 2>/dev/null && echo "Server stopped" | tee -a "$VERIFICATION_LO
 
 # Run Tests
 [ "$QUIET" = false ] && echo "Running Jest tests..." || true
-cd "$PROJECT_DIR" && export $(cat ./.env | xargs) && npx jest && echo -e "${GREEN}Tests passed${NC}" | tee -a "$VERIFICATION_LOG" || echo -e "${RED}Tests failed${NC}" | tee -a "$ERROR_LOG" || true
+cd "$PROJECT_DIR" && npx jest && echo -e "${GREEN}Tests passed${NC}" | tee -a "$VERIFICATION_LOG" || echo -e "${RED}Tests failed${NC}" | tee -a "$ERROR_LOG" || true
 
 # Prompt for Pushing Changes
 if [ "$NO_PROMPT" = true ]; then
