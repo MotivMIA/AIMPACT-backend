@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -e
+set -x  # Enable debugging to trace command execution
 
 # --- Color Codes for Readable Output ---
 GREEN='\033[0;32m'
@@ -103,7 +104,10 @@ fi
 
 # --- Create Directory Structure ---
 [ "$QUIET" = false ] && echo "Creating directory structure..." || true
-mkdir -p src/@types src/controllers src/middleware src/models src/routes src/utils src/tests data/db logs
+mkdir -p src/@types src/controllers src/middleware src/models src/routes src/utils src/tests data/db logs || {
+  echo -e "${RED}Failed to create directory structure${NC}" | tee -a "$ERROR_LOG"
+  exit 1
+}
 
 # --- Restore MongoDB Data Directory ---
 [ "$QUIET" = false ] && echo "Restoring MongoDB data directory..." || true
@@ -142,10 +146,10 @@ Run `./rebuild-aim-backend.sh [--no-prompt] [--quiet] [--build]` to set up the p
 
 ## Run
 - Development: `npm run dev`
-- API Docs: `http://localhost:5001/api/v1/docs`
-- Health Check: `http://localhost:5001/api/v1/health`
-- Metrics: `http://localhost:5001/api/v1/metrics`
-- WebSocket: `ws://localhost:5001`
+- API Docs: http://localhost:5001/api/v1/docs
+- Health Check: http://localhost:5001/api/v1/health
+- Metrics: http://localhost:5001/api/v1/metrics
+- WebSocket: ws://localhost:5001
 
 ## Deployment
 Run `./deploy.sh` with `deploy.env` configured for Docker Hub and Render.
@@ -424,7 +428,7 @@ EOF
 # --- Create src/websocket.ts ---
 [ "$QUIET" = false ] && echo "Creating src/websocket.ts..." || true
 cat > src/websocket.ts << 'EOF'
-import { WebSocketServer } from "ws";
+import { WebSocket, WebSocketServer } from "ws";
 import { Server } from "http";
 
 export const setupWebSocket = (server: Server) => {
@@ -442,7 +446,7 @@ export const setupWebSocket = (server: Server) => {
 
 export const broadcastTransactionUpdate = (wss: WebSocketServer, transaction: any) => {
   wss.clients.forEach((client) => {
-    if (client.readyState === client.OPEN) {
+    if (client.readyState === WebSocket.OPEN) {
       client.send(JSON.stringify({ type: "transactionUpdate", transaction }));
     }
   });
@@ -810,9 +814,7 @@ const userSchema: Schema = new Schema({
 export default mongoose.model<IUser>("User", userSchema);
 EOF
 
-# --- Create src/models/Transaction
-
-System: .ts ---
+# --- Create src/models/Transaction.ts ---
 [ "$QUIET" = false ] && echo "Creating src/models/Transaction.ts..." || true
 cat > src/models/Transaction.ts << 'EOF'
 import mongoose, { Schema, Document } from "mongoose";
@@ -988,7 +990,7 @@ import { MongoMemoryServer } from "mongodb-memory-server";
 import jwt from "jsonwebtoken";
 import User from "../models/User";
 import Transaction from "../models/Transaction";
-import { WebSocketServer } from "ws";
+import { WebSocketServer, WebSocket } from "ws";
 
 jest.mock("ws");
 
@@ -1009,7 +1011,7 @@ beforeAll(async () => {
 
   // Mock WebSocketServer
   mockSend = jest.fn();
-  const mockClient = { readyState: WebSocketServer.OPEN, send: mockSend };
+  const mockClient = { readyState: WebSocket.OPEN, send: mockSend };
   const mockClients = new Set([mockClient]);
   const mockWss = { clients: mockClients } as unknown as WebSocketServer;
   app.set('wss', mockWss);
