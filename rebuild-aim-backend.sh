@@ -68,7 +68,7 @@ else
     mkdir -p "$PROJECT_DIR"
     cd "$PROJECT_DIR"
     git init -b main
-    git remote add origin git@github.com:MotivMIA/aim-backend.git 2>/dev/null || echo -e "${RED}Failed to set remote${NC}" | tee -a "$ERROR erik.log"
+    git remote add origin git@github.com:MotivMIA/aim-backend.git 2>/dev/null || echo -e "${RED}Failed to set remote${NC}" | tee -a "$ERROR_LOG"
   }
 fi
 cd "$PROJECT_DIR" || { echo -e "${RED}Failed to cd to $PROJECT_DIR${NC}" | tee -a "$ERROR_LOG"; exit 1; }
@@ -236,8 +236,11 @@ EOF
 # --- Create jest.config.mjs ---
 [ "$QUIET" = false ] && echo "Creating jest.config.mjs..." || true
 cat > jest.config.mjs << 'EOF'
-require('dotenv').config({ path: '/Users/nathanwilliams/Documents/projects/aim-backend/.env' });
-module.exports = {
+import dotenv from 'dotenv';
+
+dotenv.config({ path: '/Users/nathanwilliams/Documents/projects/aim-backend/.env' });
+
+export default {
   preset: "ts-jest",
   testEnvironment: "node",
   moduleFileExtensions: ["ts", "js", "json"],
@@ -688,6 +691,44 @@ describe("POST /api/auth/register", () => {
 });
 EOF
 
+# --- Create src/tests/transaction.test.ts ---
+[ "$QUIET" = false ] && echo "Creating src/tests/transaction.test.ts..." || true
+cat > src/tests/transaction.test.ts << 'EOF'
+import request from "supertest";
+import app from "../app";
+import mongoose from "mongoose";
+import { MongoMemoryServer } from "mongodb-memory-server";
+import jwt from "jsonwebtoken";
+import User from "../models/User";
+
+let mongoServer: MongoMemoryServer;
+let token: string;
+
+beforeAll(async () => {
+  mongoServer = await MongoMemoryServer.create();
+  await mongoose.connect(mongoServer.getUri());
+  const user = new User({ email: "test@example.com", password: "hashed" });
+  await user.save();
+  token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET!, { expiresIn: "1h" });
+});
+
+afterAll(async () => {
+  await mongoose.disconnect();
+  await mongoServer.stop();
+});
+
+describe("POST /api/transactions", () => {
+  it("should create a transaction", async () => {
+    const res = await request(app)
+      .post("/api/transactions")
+      .set("Cookie", `token=${token}`)
+      .send({ amount: 100, type: "deposit", category: "test", description: "Test transaction" });
+    expect(res.status).toBe(201);
+    expect(res.body.message).toBe("Transaction created");
+  });
+});
+EOF
+
 # --- Install Dependencies ---
 [ "$QUIET" = false ] && echo "Installing dependencies..." || true
 for i in {1..3}; do
@@ -831,8 +872,7 @@ fi
 
 # Stop Server
 [ "$QUIET" = false ] && echo "Stopping server..." || true
-kill $SERVER_PID 2>/dev/null && echo "Server stopped" | tee -a "$VERIFICATION_LOG" || echo "Server already stopped" | tee -a "$VERIFICATION_LOG"
-wait $SERVER_PID 2>/dev/null || true
+kill $SERVER_PID 2>/dev/null && { echo "Server stopped" | tee -a "$VERIFICATION_LOG"; wait $SERVER_PID 2>/dev/null; } || echo "Server already stopped" | tee -a "$VERIFICATION_LOG"
 
 # Run Tests
 [ "$QUIET" = false ] && echo "Running Jest tests..." || true
