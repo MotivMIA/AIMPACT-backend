@@ -154,11 +154,12 @@ Run `./deploy.sh` with `deploy.env` configured for Docker Hub and Render.
 - Rate Limiting
 - MongoDB with AWS Secrets Manager
 - Prometheus Metrics
+- Request Logging
 EOF
 
 # --- Create .env ---
 [ "$QUIET" = false ] && echo "Creating .env..." || true
-cat > .env << EOF
+cat > .env << 'EOF'
 MONGO_USER=admin
 MONGO_PASSWORD=securepassword
 MONGO_HOST=localhost:27017
@@ -200,7 +201,8 @@ cat > package.json << 'EOF'
     "prom-client": "^15.1.3",
     "speakeasy": "^2.0.0",
     "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.1"
+    "swagger-ui-express": "^5.0.1",
+    "winston": "^3.15.0"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
@@ -214,6 +216,7 @@ cat > package.json << 'EOF'
     "@types/supertest": "^6.0.2",
     "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.6",
+    "@types/winston": "^2.4.4",
     "jest": "^29.7.0",
     "mongodb-memory-server": "^10.1.4",
     "rimraf": "^6.0.1",
@@ -361,6 +364,7 @@ import userRoutes from "./routes/userRoutes";
 import transactionRoutes from "./routes/transactionRoutes";
 import healthRoutes from "./routes/healthRoutes";
 import { metricsMiddleware, setupMetrics } from "./middleware/metricsMiddleware";
+import { loggerMiddleware } from "./middleware/loggerMiddleware";
 import { setupSwagger } from "./swagger";
 
 const app: Express = express();
@@ -370,6 +374,7 @@ app.use(cors({ origin: process.env.FRONTEND_URL || "http://localhost:5173", cred
 app.use(express.json());
 app.use(cookieParser());
 app.use(metricsMiddleware);
+app.use(loggerMiddleware);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
@@ -620,6 +625,40 @@ export const setupMetrics = (app: Express) => {
 };
 EOF
 
+# --- Create src/middleware/loggerMiddleware.ts ---
+[ "$QUIET" = false ] && echo "Creating src/middleware/loggerMiddleware.ts..." || true
+cat > src/middleware/loggerMiddleware.ts << 'EOF'
+import { Request, Response, NextFunction } from "express";
+import winston from "winston";
+
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.File({ filename: 'logs/app.log' }),
+    new winston.transports.Console()
+  ]
+});
+
+export const loggerMiddleware = (req: Request, res: Response, next: NextFunction) => {
+  const start = Date.now();
+  res.on("finish", () => {
+    const duration = Date.now() - start;
+    logger.info({
+      method: req.method,
+      url: req.url,
+      status: res.statusCode,
+      duration: `${duration}ms`,
+      ip: req.ip
+    });
+  });
+  next();
+};
+EOF
+
 # --- Create src/models/User.ts ---
 [ "$QUIET" = false ] && echo "Creating src/models/User.ts..." || true
 cat > src/models/User.ts << 'EOF'
@@ -734,7 +773,7 @@ export default router;
 EOF
 
 # --- Create src/utils/response.ts ---
-[ "$QUIETártifacts = false ] && echo "Creating src/utils/response.ts..." || true
+[ "$QUIET" = false ] && echo "Creating src/utils/response.ts..." || true
 cat > src/utils/response.ts << 'EOF'
 import { Response } from "express";
 
@@ -943,7 +982,7 @@ if [ -n "$EXISTING_PIDS" ]; then
     kill $PID 2>/dev/null || kill -9 $PID 2>/dev/null || true
   done
   # Verify port is free
-  if lsof -i :5001 > /dev/null 2>&dev/null; then
+  if lsof -i :5001 > /dev/null 2>&1; then
     echo -e "${RED}Failed to free port 5001. Another process may still be using it.${NC}" | tee -a "$ERROR_LOG"
   else
     echo "Port 5001 is now free."
