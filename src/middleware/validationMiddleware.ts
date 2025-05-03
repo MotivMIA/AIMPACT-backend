@@ -16,7 +16,7 @@ export const validateTwoFactor = [
 ];
 
 export const validateTransaction = [
-  body("amount").isNumeric().withMessage("Amount must be a number"),
+  body("amount").isNumeric().withMessage("Amount must be a number").custom(value => value > 0).withMessage("Amount must be positive"),
   body("type").isIn(["deposit", "withdrawal"]).withMessage("Type must be 'deposit' or 'withdrawal'")
 ];
 

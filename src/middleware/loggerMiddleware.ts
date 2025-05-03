@@ -21,7 +21,7 @@ export const loggerMiddleware = (req: Request, res: Response, next: NextFunction
       method: req.method,
       url: req.originalUrl || req.url,
       status: res.statusCode,
-      duration: \`${duration}ms\`,
+      duration: `${duration}ms`,
       ip: req.ip
     });
   });

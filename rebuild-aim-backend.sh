@@ -159,6 +159,7 @@ Run `./deploy.sh` with `deploy.env` configured for Docker Hub and Render.
 - Request Logging
 - API Versioning (v1)
 - WebSocket for Real-Time Notifications
+- Paginated Transaction History
 EOF
 
 # --- Create .env ---
@@ -560,9 +561,9 @@ export const createTransaction = async (req: Request, res: Response) => {
 
 export const getTransactions = async (req: Request, res: Response) => {
   const { userId } = req.user!;
-  const { startDate, endDate, category, status } = req.query;
+  const { startDate, endDate, category, status, page = '1', limit = '10' } = req.query;
 
-  const query: any = { userId };
+  const query: any = |{ userId };
   if (startDate || endDate) {
     query.date = {};
     if (startDate) query.date.$gte = new Date(startDate as string);
@@ -571,8 +572,25 @@ export const getTransactions = async (req: Request, res: Response) => {
   if (category) query.category = category;
   if (status) query.status = status;
 
-  const transactions = await Transaction.find(query).sort({ date: -1 });
-  res.json({ transactions });
+  const pageNum = parseInt(page as string, 10);
+  const limitNum = parseInt(limit as string, 10);
+  const skip = (pageNum - 1) * limitNum;
+
+  const transactions = await Transaction.find(query)
+    .sort({ date: -1 })
+    .skip(skip)
+    .limit(limitNum);
+  const total = await Transaction.countDocuments(query);
+
+  res.json({
+    transactions,
+    pagination: {
+      page: pageNum,
+      limit: limitNum,
+      total,
+      pages: Math.ceil(total / limitNum)
+    }
+  });
 };
 
 export const updateTransactionStatus = async (req: Request, res: Response) => {
@@ -788,6 +806,7 @@ cat > src/models/Transaction.ts << 'EOF'
 import mongoose, { Schema, Document } from "mongoose";
 
 export interface ITransaction extends Document {
+  _id: mongoose.Types.ObjectId;
   userId: string;
   amount: number;
   type: string;
@@ -1016,6 +1035,18 @@ describe("POST /api/v1/transactions", () => {
   });
 });
 
+describe("GET /api/v1/transactions", () => {
+  it("should return paginated transactions", async () => {
+    const res = await request(app)
+      .get("/api/v1/transactions?page=1&limit=2")
+      .set("Cookie", `token=${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.transactions).toBeInstanceOf(Array);
+    expect(res.body.pagination).toHaveProperty("page", 1);
+    expect(res.body.pagination).toHaveProperty("limit", 2);
+  });
+});
+
 describe("PATCH /api/v1/transactions/status", () => {
   it("should update transaction status", async () => {
     const res = await request(app)
@@ -1237,6 +1268,19 @@ if [ -n "$TOKEN" ]; then
   fi
 else
   [ "$QUIET" = false ] && echo "Skipping transaction status endpoint test: No token available." || true
+fi
+
+# Test Pagination Endpoint
+if [ -n "$TOKEN" ]; then
+  [ "$QUIET" = false ] && echo "Testing pagination endpoint..." || true
+  PAGINATION_OUTPUT=$(curl -s --max-time 10 http://localhost:5001/api/v1/transactions?page=1&limit=2 -H "Cookie: token=$TOKEN" || true)
+  if echo "$PAGINATION_OUTPUT" | grep -q "pagination"; then
+    [ "$QUIET" = false ] && echo -e "${GREEN}Pagination endpoint passed${NC}" || true
+  else
+    echo -e "${RED}Pagination endpoint failed: $PAGINATION_OUTPUT${NC}" | tee -a "$ERROR_LOG"
+  fi
+else
+  [ "$QUIET" = false ] && echo "Skipping pagination endpoint test: No token available." || true
 fi
 
 # Stop Server

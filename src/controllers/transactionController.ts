@@ -56,8 +56,8 @@ export const updateTransactionStatus = async (req: Request, res: Response) => {
 export const exportTransactions = async (req: Request, res: Response) => {
   const { userId } = req.user!;
   const transactions = await Transaction.find({ userId }).lean();
-  const csv = transactions.map(t => \`${t.date.toISOString()},${t.type},${t.amount},${t.category || ''},${t.status},${t.description || ''}\`).join('\n');
+  const csv = transactions.map(t => `${t.date.toISOString()},${t.type},${t.amount},${t.category || ''},${t.status},${t.description || ''}`).join('\n');
   res.header('Content-Type', 'text/csv');
   res.attachment('transactions.csv');
-  res.send(\`Date,Type,Amount,Category,Status,Description\n${csv}\`);
+  res.send(`Date,Type,Amount,Category,Status,Description\n${csv}`);
 };
