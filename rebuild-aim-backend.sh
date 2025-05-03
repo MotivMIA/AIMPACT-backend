@@ -19,12 +19,16 @@ VERIFICATION_LOG="$PROJECT_DIR/verification.log"
 # --- Check for Flags ---
 QUIET=false
 NO_PROMPT=false
+BUILD=false
 if [ "$1" = "--quiet" ] || [ "$2" = "--quiet" ]; then
   QUIET=true
 fi
 if [ "$1" = "--no-prompt" ] || [ "$2" = "--no-prompt" ]; then
   NO_PROMPT=true
   [ "$QUIET" = false ] && echo "Running in no-prompt mode..." || true
+fi
+if [ "$1" = "--build" ] || [ "$2" = "--build" ]; then
+  BUILD=true
 fi
 
 # --- Clean Up Lingering Processes ---
@@ -132,11 +136,12 @@ cat > README.md << 'EOF'
 Backend for the AIM Crypto project.
 
 ## Setup
-Run `./rebuild-aim-backend.sh [--no-prompt] [--quiet]` to set up the project.
+Run `./rebuild-aim-backend.sh [--no-prompt] [--quiet] [--build]` to set up the project.
 
 ## Run
 - Development: `npm run dev`
 - API Docs: `http://localhost:5001/api-docs`
+- Health Check: `http://localhost:5001/api/health`
 
 ## Features
 - JWT & 2FA Authentication
@@ -211,6 +216,20 @@ cat > package.json << 'EOF'
     "typescript": "^5.6.3"
   }
 }
+EOF
+
+# --- Create Dockerfile ---
+[ "$QUIET" = false ] && echo "Creating Dockerfile..." || true
+cat > Dockerfile << 'EOF'
+FROM node:18
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
+ENV PORT=5001
+EXPOSE 5001
+CMD ["npm", "start"]
 EOF
 
 # --- Create tsconfig.json ---
@@ -308,6 +327,7 @@ import rateLimit from "express-rate-limit";
 import authRoutes from "./routes/authRoutes";
 import userRoutes from "./routes/userRoutes";
 import transactionRoutes from "./routes/transactionRoutes";
+import healthRoutes from "./routes/healthRoutes";
 import { setupSwagger } from "./swagger";
 
 const app: Express = express();
@@ -320,6 +340,7 @@ app.use(cookieParser());
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/transactions", transactionRoutes);
+app.use("/api", healthRoutes);
 
 setupSwagger(app);
 
@@ -618,6 +639,20 @@ router.get("/export", authenticate, exportTransactions);
 export default router;
 EOF
 
+# --- Create src/routes/healthRoutes.ts ---
+[ "$QUIET" = false ] && echo "Creating src/routes/healthRoutes.ts..." || true
+cat > src/routes/healthRoutes.ts << 'EOF'
+import { Router } from "express";
+
+const router = Router();
+
+router.get("/health", (req, res) => {
+  res.status(200).json({ status: "OK", timestamp: new Date().toISOString() });
+});
+
+export default router;
+EOF
+
 # --- Create src/utils/response.ts ---
 [ "$QUIET" = false ] && echo "Creating src/utils/response.ts..." || true
 cat > src/utils/response.ts << 'EOF'
@@ -770,6 +805,36 @@ done
 [ "$QUIET" = false ] && echo "Testing TypeScript compilation..." || true
 npx tsc --noEmit || echo -e "${RED}Compilation failed${NC}" | tee -a "$ERROR_LOG"
 
+# --- Build Production Artifacts ---
+if [ "$BUILD" = true ]; then
+  [ "$QUIET" = false ] && echo "Building production artifacts..." || true
+  npm run build || { echo -e "${RED}Build failed${NC}" | tee -a "$ERROR_LOG"; exit 1; }
+fi
+
+# --- Create GitHub Actions Workflow ---
+[ "$QUIET" = false ] && echo "Creating GitHub Actions workflow..." || true
+mkdir -p .github/workflows
+cat > .github/workflows/ci.yml << 'EOF'
+name: CI
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Use Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+    - run: npm install
+    - run: npm run build
+    - run: npm test
+EOF
+
 # --- Commit Changes ---
 [ "$QUIET" = false ] && echo "Committing changes..." || true
 git add .
@@ -872,7 +937,7 @@ fi
 
 # Stop Server
 [ "$QUIET" = false ] && echo "Stopping server..." || true
-kill $SERVER_PID 2>/dev/null && { echo "Server stopped" | tee -a "$VERIFICATION_LOG"; wait $SERVER_PID 2>/dev/null; } || echo "Server already stopped" | tee -a "$VERIFICATION_LOG"
+kill $SERVER_PID 2>/dev/null && { echo "Server stopped" | tee -a "$VERIFICATION_LOG"; wait $SERVER_PID 2>/dev/null || true; } || true
 
 # Run Tests
 [ "$QUIET" = false ] && echo "Running Jest tests..." || true
@@ -904,4 +969,4 @@ echo -e "${GREEN}Script complete!${NC}"
 [ -f "$VERIFICATION_LOG" ] && echo "Verification logs saved to $VERIFICATION_LOG"
 echo "Start server: cd $PROJECT_DIR && npx tsx src/server.ts"
 echo "API Docs: http://localhost:5001/api-docs"
-echo "Use '--no-prompt' or '--quiet' flags for automation"
+echo "Use '--no-prompt', '--quiet', or '--build' flags for automation"
