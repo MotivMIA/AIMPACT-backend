@@ -145,18 +145,20 @@ Run `./rebuild-aim-backend.sh [--no-prompt] [--quiet] [--build]` to set up the p
 - API Docs: `http://localhost:5001/api/v1/docs`
 - Health Check: `http://localhost:5001/api/v1/health`
 - Metrics: `http://localhost:5001/api/v1/metrics`
+- WebSocket: `ws://localhost:5001`
 
 ## Deployment
 Run `./deploy.sh` with `deploy.env` configured for Docker Hub and Render.
 
 ## Features
 - JWT & 2FA Authentication
-- Transaction Management
+- Transaction Management with Status Updates
 - Configurable Rate Limiting
 - MongoDB with AWS Secrets Manager
 - Prometheus Metrics
 - Request Logging
 - API Versioning (v1)
+- WebSocket for Real-Time Notifications
 EOF
 
 # --- Create .env ---
@@ -206,7 +208,8 @@ cat > package.json << 'EOF'
     "speakeasy": "^2.0.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
-    "winston": "^3.15.0"
+    "winston": "^3.15.0",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
@@ -220,6 +223,7 @@ cat > package.json << 'EOF'
     "@types/supertest": "^6.0.2",
     "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.6",
+    "@types/ws": "^8.5.12",
     "jest": "^29.7.0",
     "mongodb-memory-server": "^10.1.4",
     "rimraf": "^6.0.1",
@@ -322,8 +326,10 @@ EOF
 cat > src/server.ts << 'EOF'
 import dotenv from "dotenv";
 import AWS from "aws-sdk";
+import { createServer } from "http";
 import app from "./app";
 import connectDB from "./db";
+import { setupWebSocket } from "./websocket";
 
 dotenv.config();
 
@@ -348,7 +354,10 @@ const MONGO_URI = process.env.MONGO_URI || `mongodb://${process.env.MONGO_USER}:
   await getSecrets();
   if (!MONGO_URI) throw new Error("MongoDB URI not provided");
   await connectDB();
-  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+  const server = createServer(app);
+  const wss = setupWebSocket(server);
+  app.set('wss', wss);
+  server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 })().catch(err => {
   console.error("Startup failed:", err);
   process.exit(1);
@@ -408,6 +417,34 @@ const connectDB = async (): Promise<void> => {
 };
 
 export default connectDB;
+EOF
+
+# --- Create src/websocket.ts ---
+[ "$QUIET" = false ] && echo "Creating src/websocket.ts..." || true
+cat > src/websocket.ts << 'EOF'
+import { WebSocketServer } from "ws";
+import { Server } from "http";
+
+export const setupWebSocket = (server: Server) => {
+  const wss = new WebSocketServer({ server });
+
+  wss.on("connection", (ws) => {
+    ws.on("message", (message) => {
+      console.log("Received:", message.toString());
+    });
+    ws.send(JSON.stringify({ message: "Connected to WebSocket" }));
+  });
+
+  return wss;
+};
+
+export const broadcastTransactionUpdate = (wss: WebSocketServer, transaction: any) => {
+  wss.clients.forEach((client) => {
+    if (client.readyState === client.OPEN) {
+      client.send(JSON.stringify({ type: "transactionUpdate", transaction }));
+    }
+  });
+};
 EOF
 
 # --- Create src/controllers/authController.ts ---
@@ -503,9 +540,11 @@ EOF
 [ "$QUIET" = false ] && echo "Creating src/controllers/transactionController.ts..." || true
 cat > src/controllers/transactionController.ts << 'EOF'
 import { Request, Response } from "express";
+import { WebSocketServer } from "ws";
 import Transaction from "../models/Transaction";
 import { sendError } from "../utils/response";
 import { validationResult } from "express-validator";
+import { broadcastTransactionUpdate } from "../websocket";
 
 export const createTransaction = async (req: Request, res: Response) => {
   const errors = validationResult(req);
@@ -536,13 +575,32 @@ export const getTransactions = async (req: Request, res: Response) => {
   res.json({ transactions });
 };
 
+export const updateTransactionStatus = async (req: Request, res: Response) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return sendError(res, 400, { message: errors.array()[0].msg });
+
+  const { userId } = req.user!;
+  const { transactionId, status } = req.body;
+
+  const transaction = await Transaction.findOne({ _id: transactionId, userId });
+  if (!transaction) return sendError(res, 404, { message: "Transaction not found" });
+
+  transaction.status = status;
+  await transaction.save();
+  
+  const wss = (req.app.get('wss') as WebSocketServer);
+  broadcastTransactionUpdate(wss, transaction);
+
+  res.json({ message: "Transaction status updated", transaction });
+};
+
 export const exportTransactions = async (req: Request, res: Response) => {
   const { userId } = req.user!;
   const transactions = await Transaction.find({ userId }).lean();
-  const csv = transactions.map(t => `${t.date.toISOString()},${t.type},${t.amount},${t.category || ''},${t.status},${t.description || ''}`).join('\n');
+  const csv = transactions.map(t => \`${t.date.toISOString()},${t.type},${t.amount},${t.category || ''},${t.status},${t.description || ''}\`).join('\n');
   res.header('Content-Type', 'text/csv');
   res.attachment('transactions.csv');
-  res.send(`Date,Type,Amount,Category,Status,Description\n${csv}`);
+  res.send(\`Date,Type,Amount,Category,Status,Description\n${csv}\`);
 };
 EOF
 
@@ -591,6 +649,11 @@ export const validateTwoFactor = [
 export const validateTransaction = [
   body("amount").isNumeric().withMessage("Amount must be a number"),
   body("type").isIn(["deposit", "withdrawal"]).withMessage("Type must be 'deposit' or 'withdrawal'")
+];
+
+export const validateTransactionStatus = [
+  body("transactionId").notEmpty().withMessage("Transaction ID required"),
+  body("status").isIn(["Pending", "Completed", "Failed"]).withMessage("Status must be 'Pending', 'Completed', or 'Failed'")
 ];
 EOF
 
@@ -657,9 +720,9 @@ export const loggerMiddleware = (req: Request, res: Response, next: NextFunction
     const duration = Date.now() - start;
     logger.info({
       method: req.method,
-      url: req.url,
+      url: req.originalUrl || req.url,
       status: res.statusCode,
-      duration: `${duration}ms`,
+      duration: \`${duration}ms\`,
       ip: req.ip
     });
   });
@@ -690,7 +753,7 @@ export const errorMiddleware = (err: Error, req: Request, res: Response, next: N
     message: err.message,
     stack: err.stack,
     method: req.method,
-    url: req.url,
+    url: req.originalUrl || req.url,
     ip: req.ip
   });
   res.status(500).json({ message: "Internal server error" });
@@ -738,7 +801,7 @@ const transactionSchema: Schema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
   amount: { type: Number, required: true },
   type: { type: String, required: true },
-  date: { type: Date, Fdefault: Date.now },
+  date: { type: Date, default: Date.now },
   category: { type: String },
   status: { type: String, default: "Pending" },
   description: { type: String }
@@ -783,14 +846,15 @@ EOF
 [ "$QUIET" = false ] && echo "Creating src/routes/transactionRoutes.ts..." || true
 cat > src/routes/transactionRoutes.ts << 'EOF'
 import { Router } from "express";
-import { createTransaction, getTransactions, exportTransactions } from "../controllers/transactionController";
+import { createTransaction, getTransactions, updateTransactionStatus, exportTransactions } from "../controllers/transactionController";
 import { authenticate } from "../middleware/authMiddleware";
-import { validateTransaction } from "../middleware/validationMiddleware";
+import { validateTransaction, validateTransactionStatus } from "../middleware/validationMiddleware";
 
 const router = Router();
 
 router.post("/", authenticate, validateTransaction, createTransaction);
 router.get("/", authenticate, getTransactions);
+router.patch("/status", authenticate, validateTransactionStatus, updateTransactionStatus);
 router.get("/export", authenticate, exportTransactions);
 
 export default router;
@@ -892,9 +956,11 @@ import mongoose from "mongoose";
 import { MongoMemoryServer } from "mongodb-memory-server";
 import jwt from "jsonwebtoken";
 import User from "../models/User";
+import Transaction from "../models/Transaction";
 
 let mongoServer: MongoMemoryServer;
 let token: string;
+let transactionId: string;
 
 beforeAll(async () => {
   mongoServer = await MongoMemoryServer.create();
@@ -902,6 +968,9 @@ beforeAll(async () => {
   const user = new User({ email: "test@example.com", password: "hashed" });
   await user.save();
   token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET!, { expiresIn: "1h" });
+  const transaction = new Transaction({ userId: user._id, amount: 100, type: "deposit", status: "Pending" });
+  await transaction.save();
+  transactionId = transaction._id.toString();
 });
 
 afterAll(async () => {
@@ -935,6 +1004,27 @@ describe("POST /api/v1/transactions", () => {
       .send({ amount: 100, type: "invalid", category: "test", description: "Test transaction" });
     expect(res.status).toBe(400);
     expect(res.body.message).toBe("Type must be 'deposit' or 'withdrawal'");
+  });
+});
+
+describe("PATCH /api/v1/transactions/status", () => {
+  it("should update transaction status", async () => {
+    const res = await request(app)
+      .patch("/api/v1/transactions/status")
+      .set("Cookie", `token=${token}`)
+      .send({ transactionId, status: "Completed" });
+    expect(res.status).toBe(200);
+    expect(res.body.message).toBe("Transaction status updated");
+    expect(res.body.transaction.status).toBe("Completed");
+  });
+
+  it("should fail if status is invalid", async () => {
+    const res = await request(app)
+      .patch("/api/v1/transactions/status")
+      .set("Cookie", `token=${token}`)
+      .send({ transactionId, status: "Invalid" });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe("Status must be 'Pending', 'Completed', or 'Failed'");
   });
 });
 EOF
@@ -1117,9 +1207,27 @@ fi
 [ "$QUIET" = false ] && echo "Testing health endpoint..." || true
 HEALTH_OUTPUT=$(curl -s --max-time 10 http://localhost:5001/api/v1/health || true)
 if echo "$HEALTH_OUTPUT" | grep -q "OK"; then
-  [ "$QUIET" = false ] && echo -e "${GREEN}Health endpoint passed${NC}" || true
+  [ "$QUIET" = false ] && echo -e "${GREEN}Health endpoint passed${NC}" | true
 else
   echo -e "${RED}Health endpoint failed: $HEALTH_OUTPUT${NC}" | tee -a "$ERROR_LOG"
+fi
+
+# Test Transaction Status Endpoint
+if [ -n "$TOKEN" ]; then
+  [ "$QUIET" = false ] && echo "Testing transaction status endpoint..." || true
+  TRANSACTION_ID=$(curl -s -X POST http://localhost:5001/api/v1/transactions -H "Cookie: token=$TOKEN" -H "Content-Type: application/json" -d '{"amount":100,"type":"deposit"}' | grep -o '"_id":"[^"]*"' | sed 's/"_id":"\(.*\)"/\1/' || echo "")
+  if [ -n "$TRANSACTION_ID" ]; then
+    STATUS_OUTPUT=$(curl -s --max-time 10 -X PATCH http://localhost:5001/api/v1/transactions/status -H "Cookie: token=$TOKEN" -H "Content-Type: application/json" -d "{\"transactionId\":\"$TRANSACTION_ID\",\"status\":\"Completed\"}" || true)
+    if echo "$STATUS_OUTPUT" | grep -q "Transaction status updated"; then
+      [ "$QUIET" = false ] && echo -e "${GREEN}Transaction status endpoint passed${NC}" || true
+    else
+      echo -e "${RED}Transaction status endpoint failed: $STATUS_OUTPUT${NC}" | tee -a "$ERROR_LOG"
+    fi
+  else
+    echo -e "${RED}Failed to create transaction for status test${NC}" | tee -a "$ERROR_LOG"
+  fi
+else
+  [ "$QUIET" = false ] && echo "Skipping transaction status endpoint test: No token available." || true
 fi
 
 # Stop Server
@@ -1152,8 +1260,4 @@ pgrep -f "tsx src/server.ts" | xargs kill -9 2>/dev/null || true
 
 # --- Final Messages ---
 echo -e "${GREEN}Script complete!${NC}"
-[ -f "$ERROR_LOG" ] && echo "Check $ERROR_LOG for errors"
-[ -f "$VERIFICATION_LOG" ] && echo "Verification logs saved to $VERIFICATION_LOG"
-echo "Start server: cd $PROJECT_DIR && npx tsx src/server.ts"
-echo "API Docs: http://localhost:5001/api/v1/docs"
-echo "Use '--no-prompt', '--quiet', or '--build' flags for automation"
+[ -f "$ERROR_LOG" ] && echo
