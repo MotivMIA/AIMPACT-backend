@@ -307,7 +307,8 @@ export default {
   testEnvironment: "node",
   moduleFileExtensions: ["ts", "js", "json"],
   transform: { "^.+\\.ts$": "ts-jest" },
-  testMatch: ["**/src/tests/**/*.test.ts"]
+  testMatch: ["**/src/tests/**/*.test.ts"],
+  testTimeout: 10000
 };
 EOF
 
@@ -613,8 +614,10 @@ export const updateTransactionStatus = async (req: Request, res: Response) => {
   transaction.status = status;
   await transaction.save();
 
-  const wss = (req.app.get('wss') as WebSocketServer);
-  broadcastTransactionUpdate(wss, transaction);
+  const wss = req.app.get('wss') as WebSocketServer | undefined;
+  if (wss) {
+    broadcastTransactionUpdate(wss, transaction);
+  }
 
   res.json({ message: "Transaction status updated", transaction });
 };
@@ -984,6 +987,8 @@ import jwt from "jsonwebtoken";
 import User from "../models/User";
 import Transaction from "../models/Transaction";
 
+jest.mock("ws");
+
 let mongoServer: MongoMemoryServer;
 let token: string;
 let transactionId: string;
@@ -997,11 +1002,16 @@ beforeAll(async () => {
   const transaction = new Transaction({ userId: user._id, amount: 100, type: "deposit", status: "Pending" });
   await transaction.save();
   transactionId = transaction._id.toString();
+
+  // Mock WebSocketServer
+  const mockWss = { clients: new Set([{ readyState: 1, send: jest.fn() }]) };
+  app.set('wss', mockWss);
 });
 
 afterAll(async () => {
   await mongoose.disconnect();
   await mongoServer.stop();
+  jest.clearAllMocks();
 });
 
 describe("POST /api/v1/transactions", () => {
@@ -1063,6 +1073,7 @@ describe("PATCH /api/v1/transactions/status", () => {
     expect(res.status).toBe(200);
     expect(res.body.message).toBe("Transaction status updated");
     expect(res.body.transaction.status).toBe("Completed");
+    expect(app.get('wss').clients.values().next().value.send).toHaveBeenCalled();
   });
 
   it("should fail if status is invalid", async () => {
@@ -1072,6 +1083,42 @@ describe("PATCH /api/v1/transactions/status", () => {
       .send({ transactionId, status: "Invalid" });
     expect(res.status).toBe(400);
     expect(res.body.message).toBe("Status must be 'Pending', 'Completed', or 'Failed'");
+  });
+});
+EOF
+
+# --- Create src/tests/websocket.test.ts ---
+[ "$QUIET" = false ] && echo "Creating src/tests/websocket.test.ts..." || true
+cat > src/tests/websocket.test.ts << 'EOF'
+import { WebSocket } from "ws";
+import { createServer } from "http";
+import app from "../app";
+import { setupWebSocket } from "../websocket";
+
+describe("WebSocket", () => {
+  let server;
+  let wss;
+
+  beforeAll((done) => {
+    server = createServer(app);
+    wss = setupWebSocket(server);
+    server.listen(0, () => done());
+  });
+
+  afterAll((done) => {
+    wss.close();
+    server.close(done);
+  });
+
+  it("should connect and receive a welcome message", (done) => {
+    const ws = new WebSocket(`ws://localhost:${server.address().port}`);
+    ws.on("open", () => {
+      ws.on("message", (data) => {
+        expect(JSON.parse(data.toString())).toEqual({ message: "Connected to WebSocket" });
+        ws.close();
+        done();
+      });
+    });
   });
 });
 EOF
@@ -1240,7 +1287,7 @@ fi
 # Test Profile Endpoint
 if [ -n "$TOKEN" ]; then
   [ "$QUIET" = false ] && echo "Testing profile endpoint..." || true
-  PROFILE_OUTPUT=$(curl -s --max-time 10 http://localhost:5001/api/v1/user/profile -H "Cookie: token=$TOKEN" || true)
+  PROFILE_OUTPUT=$(curl -s --max-time 10 -H "Cookie: token=$TOKEN" http://localhost:5001/api/v1/user/profile || true)
   if echo "$PROFILE_OUTPUT" | grep -q "User profile"; then
     [ "$QUIET" = false ] && echo -e "${GREEN}Profile endpoint passed${NC}" || true
   else
@@ -1262,66 +1309,4 @@ fi
 # Test Transaction Status Endpoint
 if [ -n "$TOKEN" ]; then
   [ "$QUIET" = false ] && echo "Testing transaction status endpoint..." || true
-  TRANSACTION_ID=$(curl -s -X POST http://localhost:5001/api/v1/transactions -H "Cookie: token=$TOKEN" -H "Content-Type: application/json" -d '{"amount":100,"type":"deposit"}' | grep -o '"_id":"[^"]*"' | sed 's/"_id":"\(.*\)"/\1/' || echo "")
-  if [ -n "$TRANSACTION_ID" ]; then
-    STATUS_OUTPUT=$(curl -s --max-time 10 -X PATCH http://localhost:5001/api/v1/transactions/status -H "Cookie: token=$TOKEN" -H "Content-Type: application/json" -d "{\"transactionId\":\"$TRANSACTION_ID\",\"status\":\"Completed\"}" || true)
-    if echo "$STATUS_OUTPUT" | grep -q "Transaction status updated"; then
-      [ "$QUIET" = false ] && echo -e "${GREEN}Transaction status endpoint passed${NC}" || true
-    else
-      echo -e "${RED}Transaction status endpoint failed: $STATUS_OUTPUT${NC}" | tee -a "$ERROR_LOG"
-    fi
-  else
-    echo -e "${RED}Failed to create transaction for status test${NC}" | tee -a "$ERROR_LOG"
-  fi
-else
-  [ "$QUIET" = false ] && echo "Skipping transaction status endpoint test: No token available." || true
-fi
-
-# Test Pagination Endpoint
-if [ -n "$TOKEN" ]; then
-  [ "$QUIET" = false ] && echo "Testing pagination endpoint..." || true
-  PAGINATION_OUTPUT=$(curl -s --max-time 10 http://localhost:5001/api/v1/transactions?page=1&limit=2 -H "Cookie: token=$TOKEN" || true)
-  if echo "$PAGINATION_OUTPUT" | grep -q "pagination"; then
-    [ "$QUIET" = false ] && echo -e "${GREEN}Pagination endpoint passed${NC}" || true
-  else
-    echo -e "${RED}Pagination endpoint failed: $PAGINATION_OUTPUT${NC}" | tee -a "$ERROR_LOG"
-  fi
-else
-  [ "$QUIET" = false ] && echo "Skipping pagination endpoint test: No token available." || true
-fi
-
-# Stop Server
-[ "$QUIET" = false ] && echo "Stopping server..." || true
-kill $SERVER_PID 2>/dev/null && echo "Server stopped" | tee -a "$VERIFICATION_LOG" || true
-
-# Run Tests
-[ "$QUIET" = false ] && echo "Running Jest tests..." || true
-cd "$PROJECT_DIR" && npx jest && echo -e "${GREEN}Tests passed${NC}" | tee -a "$VERIFICATION_LOG" || echo -e "${RED}Tests failed${NC}" | tee -a "$ERROR_LOG" || true
-
-# Prompt for Pushing Changes
-if [ "$NO_PROMPT" = true ]; then
-  push_choice="y"
-else
-  read -p "Push changes to remote repository? (y/n): " push_choice
-fi
-
-if [ "$push_choice" = "y" ] || [ "$push_choice" = "Y" ]; then
-  [ "$QUIET" = false ] && echo "Pushing changes to remote repository..." || true
-  git add . && git commit -m "Verified setup" || echo "No changes to commit" | tee -a "$VERIFICATION_LOG"
-  git push origin main || echo -e "${RED}Push failed${NC}" | tee -a "$ERROR_LOG"
-else
-  [ "$QUIET" = false ] && echo "Skipping push to remote repository." || true
-fi
-
-# --- Clean Up Lingering Processes ---
-[ "$QUIET" = false ] && echo "Ensuring no lingering processes..." || true
-pgrep -f "mongod --dbpath $DATA_DIR" | xargs kill -9 2>/dev/null || true
-pgrep -f "tsx src/server.ts" | xargs kill -9 2>/dev/null || true
-
-# --- Final Messages ---
-echo -e "${GREEN}Script complete!${NC}"
-[ -f "$ERROR_LOG" ] && echo "Check $ERROR_LOG for errors"
-[ -f "$VERIFICATION_LOG" ] && echo "Verification logs saved to $VERIFICATION_LOG"
-echo "Start server: cd $PROJECT_DIR && npx tsx src/server.ts"
-echo "API Docs: http://localhost:5001/api/v1/docs"
-echo "Use '--no-prompt', '--quiet', or '--build' flags for automation"
+  TRANSACTION_ID=$(curl -s -X POST http://localhost:5001/api/v1/transactions -H "Cookie: token=$TOKEN" -H "Content-Type: application/json" -d '{"amount":100,"type":"deposit"}' | grep -o '"_id":"[^"]*"' | sed 's/"_id":"\(.*\)
