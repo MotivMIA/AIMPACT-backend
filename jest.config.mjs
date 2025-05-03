@@ -1,5 +1,8 @@
-require('dotenv').config({ path: '/Users/nathanwilliams/Documents/projects/aim-backend/.env' });
-module.exports = {
+import dotenv from 'dotenv';
+
+dotenv.config({ path: '/Users/nathanwilliams/Documents/projects/aim-backend/.env' });
+
+export default {
   preset: "ts-jest",
   testEnvironment: "node",
   moduleFileExtensions: ["ts", "js", "json"],
