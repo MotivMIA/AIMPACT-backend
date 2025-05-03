@@ -71,8 +71,10 @@ export const updateTransactionStatus = async (req: Request, res: Response) => {
   transaction.status = status;
   await transaction.save();
 
-  const wss = (req.app.get('wss') as WebSocketServer);
-  broadcastTransactionUpdate(wss, transaction);
+  const wss = req.app.get('wss') as WebSocketServer | undefined;
+  if (wss) {
+    broadcastTransactionUpdate(wss, transaction);
+  }
 
   res.json({ message: "Transaction status updated", transaction });
 };

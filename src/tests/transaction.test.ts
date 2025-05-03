@@ -6,6 +6,8 @@ import jwt from "jsonwebtoken";
 import User from "../models/User";
 import Transaction from "../models/Transaction";
 
+jest.mock("ws");
+
 let mongoServer: MongoMemoryServer;
 let token: string;
 let transactionId: string;
@@ -19,11 +21,16 @@ beforeAll(async () => {
   const transaction = new Transaction({ userId: user._id, amount: 100, type: "deposit", status: "Pending" });
   await transaction.save();
   transactionId = transaction._id.toString();
+
+  // Mock WebSocketServer
+  const mockWss = { clients: new Set([{ readyState: 1, send: jest.fn() }]) };
+  app.set('wss', mockWss);
 });
 
 afterAll(async () => {
   await mongoose.disconnect();
   await mongoServer.stop();
+  jest.clearAllMocks();
 });
 
 describe("POST /api/v1/transactions", () => {
@@ -85,6 +92,7 @@ describe("PATCH /api/v1/transactions/status", () => {
     expect(res.status).toBe(200);
     expect(res.body.message).toBe("Transaction status updated");
     expect(res.body.transaction.status).toBe("Completed");
+    expect(app.get('wss').clients.values().next().value.send).toHaveBeenCalled();
   });
 
   it("should fail if status is invalid", async () => {

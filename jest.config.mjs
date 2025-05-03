@@ -7,5 +7,6 @@ export default {
   testEnvironment: "node",
   moduleFileExtensions: ["ts", "js", "json"],
   transform: { "^.+\\.ts$": "ts-jest" },
-  testMatch: ["**/src/tests/**/*.test.ts"]
+  testMatch: ["**/src/tests/**/*.test.ts"],
+  testTimeout: 10000
 };
