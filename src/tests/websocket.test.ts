@@ -1,5 +1,6 @@
 import { WebSocket, WebSocketServer } from "ws";
 import { createServer, Server } from "http";
+import { AddressInfo } from "net";
 import app from "../app";
 import { setupWebSocket } from "../websocket";
 
@@ -19,7 +20,12 @@ describe("WebSocket", () => {
   });
 
   it("should connect and receive a welcome message", (done) => {
-    const ws = new WebSocket(`ws://localhost:${server.address()!.port}`);
+    const address = server.address();
+    if (!address || typeof address === "string") {
+      done(new Error("Server address is invalid or not an AddressInfo object"));
+      return;
+    }
+    const ws = new WebSocket(`ws://localhost:${(address as AddressInfo).port}`);
     ws.on("open", () => {
       ws.on("message", (data) => {
         expect(JSON.parse(data.toString())).toEqual({ message: "Connected to WebSocket" });
