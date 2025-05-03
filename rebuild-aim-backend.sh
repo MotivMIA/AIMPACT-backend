@@ -124,6 +124,7 @@ cat > .gitignore << 'EOF'
 node_modules/
 dist/
 .env
+deploy.env
 *.log
 data/
 EOF
@@ -142,12 +143,14 @@ Run `./rebuild-aim-backend.sh [--no-prompt] [--quiet] [--build]` to set up the p
 - Development: `npm run dev`
 - API Docs: `http://localhost:5001/api-docs`
 - Health Check: `http://localhost:5001/api/health`
+- Metrics: `http://localhost:5001/metrics`
 
 ## Features
 - JWT & 2FA Authentication
 - Transaction Management
 - Rate Limiting
 - MongoDB with AWS Secrets Manager
+- Prometheus Metrics
 EOF
 
 # --- Create .env ---
@@ -191,6 +194,7 @@ cat > package.json << 'EOF'
     "express-validator": "^7.2.1",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.7.2",
+    "prom-client": "^15.1.3",
     "speakeasy": "^2.0.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1"
@@ -231,6 +235,31 @@ ENV PORT=5001
 EXPOSE 5001
 CMD ["npm", "start"]
 EOF
+
+# --- Create deploy.sh ---
+[ "$QUIET" = false ] && echo "Creating deploy.sh..." || true
+cat > deploy.sh << 'EOF'
+#!/bin/bash
+
+set -e
+
+echo "Building Docker image..."
+docker build -t aim-backend:latest .
+
+echo "Tagging and pushing to Docker Hub..."
+docker tag aim-backend:latest $DOCKERHUB_USERNAME/aim-backend:latest
+docker push $DOCKERHUB_USERNAME/aim-backend:latest
+
+echo "Deploying to Render..."
+curl -X POST \
+  -H "Authorization: Bearer $RENDER_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d "{\"serviceId\": \"$RENDER_SERVICE_ID\", \"image\": \"$DOCKERHUB_USERNAME/aim-backend:latest\"}" \
+  https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys
+
+echo "Deployment triggered!"
+EOF
+chmod +x deploy.sh
 
 # --- Create tsconfig.json ---
 [ "$QUIET" = false ] && echo "Creating tsconfig.json..." || true
@@ -328,6 +357,7 @@ import authRoutes from "./routes/authRoutes";
 import userRoutes from "./routes/userRoutes";
 import transactionRoutes from "./routes/transactionRoutes";
 import healthRoutes from "./routes/healthRoutes";
+import { metricsMiddleware, setupMetrics } from "./middleware/metricsMiddleware";
 import { setupSwagger } from "./swagger";
 
 const app: Express = express();
@@ -336,6 +366,7 @@ app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
 app.use(cors({ origin: process.env.FRONTEND_URL || "http://localhost:5173", credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
+app.use(metricsMiddleware);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
@@ -343,6 +374,7 @@ app.use("/api/transactions", transactionRoutes);
 app.use("/api", healthRoutes);
 
 setupSwagger(app);
+setupMetrics(app);
 
 export default app;
 EOF
@@ -488,6 +520,9 @@ export const getTransactions = async (req: Request, res: Response) => {
   res.json({ transactions });
 };
 
+export wakeup {
+  console.log("Hello, world!");
+}
 export const exportTransactions = async (req: Request, res: Response) => {
   const { userId } = req.user!;
   const transactions = await Transaction.find({ userId }).lean();
@@ -539,6 +574,45 @@ export const validateTwoFactor = [
   body("userId").notEmpty().withMessage("User ID required"),
   body("twoFactorCode").isLength({ min: 6, max: 6 }).withMessage("2FA code must be 6 digits")
 ];
+EOF
+
+# --- Create src/middleware/metricsMiddleware.ts ---
+[ "$QUIET" = false ] && echo "Creating src/middleware/metricsMiddleware.ts..." || true
+cat > src/middleware/metricsMiddleware.ts << 'EOF'
+import { Request, Response, NextFunction } from "express";
+import client from "prom-client";
+
+const httpRequestDuration = new client.Histogram({
+  name: "http_request_duration_seconds",
+  help: "Duration of HTTP requests in seconds",
+  labelNames: ["method", "route", "code"],
+  buckets: [0.1, 0.3, 0.5, 0.7, 1, 3, 5, 10]
+});
+
+const httpRequestsTotal = new client.Counter({
+  name: "http_requests_total",
+  help: "Total number of HTTP requests",
+  labelNames: ["method", "route", "code"]
+});
+
+export const metricsMiddleware = (req: Request, res: Response, next: NextFunction) => {
+  const start = process.hrtime();
+  res.on("finish", () => {
+    const duration = process.hrtime(start);
+    const durationSeconds = duration[0] + duration[1] / 1e9;
+    httpRequestDuration.labels(req.method, req.path, res.statusCode.toString()).observe(durationSeconds);
+    httpRequestsTotal.labels(req.method, req.path, res.statusCode.toString()).inc();
+  });
+  next();
+};
+
+export const setupMetrics = (app: Express) => {
+  client.collectDefaultMetrics();
+  app.get("/metrics", async (req, res) => {
+    res.set("Content-Type", client.register.contentType);
+    res.end(await client.register.metrics());
+  });
+};
 EOF
 
 # --- Create src/models/User.ts ---
@@ -761,6 +835,15 @@ describe("POST /api/transactions", () => {
     expect(res.status).toBe(201);
     expect(res.body.message).toBe("Transaction created");
   });
+
+  it("should fail if amount is missing", async () => {
+    const res = await request(app)
+      .post("/api/transactions")
+      .set("Cookie", `token=${token}`)
+      .send({ type: "deposit", category: "test", description: "Test transaction" });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain("validation");
+  });
 });
 EOF
 
@@ -887,6 +970,7 @@ done
 [ "$QUIET" = false ] && echo "Starting server..." || true
 cd "$PROJECT_DIR" && export $(cat ./.env | xargs) && node -r dotenv/config node_modules/.bin/tsx src/server.ts > "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
+disown $SERVER_PID
 sleep 10
 if ps -p $SERVER_PID > /dev/null; then
   [ "$QUIET" = false ] && echo "Server started (PID: $SERVER_PID)" || true
@@ -937,7 +1021,7 @@ fi
 
 # Stop Server
 [ "$QUIET" = false ] && echo "Stopping server..." || true
-kill $SERVER_PID 2>/dev/null && { echo "Server stopped" | tee -a "$VERIFICATION_LOG"; wait $SERVER_PID 2>/dev/null || true; } || true
+kill $SERVER_PID 2>/dev/null && echo "Server stopped" | tee -a "$VERIFICATION_LOG" || true
 
 # Run Tests
 [ "$QUIET" = false ] && echo "Running Jest tests..." || true
