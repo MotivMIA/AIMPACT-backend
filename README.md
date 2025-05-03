@@ -10,6 +10,8 @@ Run the setup scripts from the parent directory (e.g., ~/Documents/projects/scri
 - MongoDB setup only: `./scripts/master.sh mongo`
 - Verification only: `./scripts/master.sh verify`
 
+Use `--debug` for verbose output (e.g., `./master.sh --debug`).
+
 Scripts should be stored outside the project directory (e.g., ~/Documents/projects/scripts) to avoid being overwritten.
 
 ## Run
