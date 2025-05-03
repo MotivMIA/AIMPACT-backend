@@ -3,7 +3,7 @@
 Backend for the AIM Crypto project.
 
 ## Setup
-Run `./rebuild-aim-backend.sh [--no-prompt] [--quiet]` to set up the project.
+Run `./rebuild-aim-backend.sh [--no-prompt]` to set up the project.
 
 ## Run
 - Development: `npm run dev`
