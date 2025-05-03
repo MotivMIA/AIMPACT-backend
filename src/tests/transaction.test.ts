@@ -5,7 +5,7 @@ import { MongoMemoryServer } from "mongodb-memory-server";
 import jwt from "jsonwebtoken";
 import User from "../models/User";
 import Transaction from "../models/Transaction";
-import { WebSocketServer } from "ws";
+import { WebSocketServer, WebSocket } from "ws";
 
 jest.mock("ws");
 
@@ -26,7 +26,7 @@ beforeAll(async () => {
 
   // Mock WebSocketServer
   mockSend = jest.fn();
-  const mockClient = { readyState: WebSocketServer.OPEN, send: mockSend };
+  const mockClient = { readyState: WebSocket.OPEN, send: mockSend };
   const mockClients = new Set([mockClient]);
   const mockWss = { clients: mockClients } as unknown as WebSocketServer;
   app.set('wss', mockWss);

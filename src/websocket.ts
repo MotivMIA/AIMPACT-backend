@@ -1,4 +1,4 @@
-import { WebSocketServer } from "ws";
+import { WebSocket, WebSocketServer } from "ws";
 import { Server } from "http";
 
 export const setupWebSocket = (server: Server) => {
@@ -16,7 +16,7 @@ export const setupWebSocket = (server: Server) => {
 
 export const broadcastTransactionUpdate = (wss: WebSocketServer, transaction: any) => {
   wss.clients.forEach((client) => {
-    if (client.readyState === client.OPEN) {
+    if (client.readyState === WebSocket.OPEN) {
       client.send(JSON.stringify({ type: "transactionUpdate", transaction }));
     }
   });
