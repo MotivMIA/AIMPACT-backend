@@ -11,6 +11,9 @@ Run `./rebuild-aim-backend.sh [--no-prompt] [--quiet] [--build]` to set up the p
 - Health Check: `http://localhost:5001/api/health`
 - Metrics: `http://localhost:5001/metrics`
 
+## Deployment
+Run `./deploy.sh` with `deploy.env` configured for Docker Hub and Render.
+
 ## Features
 - JWT & 2FA Authentication
 - Transaction Management

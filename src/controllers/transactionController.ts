@@ -32,9 +32,6 @@ export const getTransactions = async (req: Request, res: Response) => {
   res.json({ transactions });
 };
 
-export wakeup {
-  console.log("Hello, world!");
-}
 export const exportTransactions = async (req: Request, res: Response) => {
   const { userId } = req.user!;
   const transactions = await Transaction.find({ userId }).lean();
