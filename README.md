@@ -9,9 +9,11 @@ Run `./rebuild-aim-backend.sh [--no-prompt] [--quiet] [--build]` to set up the p
 - Development: `npm run dev`
 - API Docs: `http://localhost:5001/api-docs`
 - Health Check: `http://localhost:5001/api/health`
+- Metrics: `http://localhost:5001/metrics`
 
 ## Features
 - JWT & 2FA Authentication
 - Transaction Management
 - Rate Limiting
 - MongoDB with AWS Secrets Manager
+- Prometheus Metrics

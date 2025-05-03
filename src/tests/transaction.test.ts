@@ -30,4 +30,13 @@ describe("POST /api/transactions", () => {
     expect(res.status).toBe(201);
     expect(res.body.message).toBe("Transaction created");
   });
+
+  it("should fail if amount is missing", async () => {
+    const res = await request(app)
+      .post("/api/transactions")
+      .set("Cookie", `token=${token}`)
+      .send({ type: "deposit", category: "test", description: "Test transaction" });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain("validation");
+  });
 });
