@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from "express";
+import { Express, Request, Response, NextFunction } from "express";
 import client from "prom-client";
 
 const httpRequestDuration = new client.Histogram({
@@ -27,7 +27,7 @@ export const metricsMiddleware = (req: Request, res: Response, next: NextFunctio
 
 export const setupMetrics = (app: Express) => {
   client.collectDefaultMetrics();
-  app.get("/metrics", async (req, res) => {
+  app.get("/api/v1/metrics", async (req: Request, res: Response) => {
     res.set("Content-Type", client.register.contentType);
     res.end(await client.register.metrics());
   });

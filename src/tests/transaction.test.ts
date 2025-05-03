@@ -21,10 +21,10 @@ afterAll(async () => {
   await mongoServer.stop();
 });
 
-describe("POST /api/transactions", () => {
+describe("POST /api/v1/transactions", () => {
   it("should create a transaction", async () => {
     const res = await request(app)
-      .post("/api/transactions")
+      .post("/api/v1/transactions")
       .set("Cookie", `token=${token}`)
       .send({ amount: 100, type: "deposit", category: "test", description: "Test transaction" });
     expect(res.status).toBe(201);
@@ -33,7 +33,7 @@ describe("POST /api/transactions", () => {
 
   it("should fail if amount is missing", async () => {
     const res = await request(app)
-      .post("/api/transactions")
+      .post("/api/v1/transactions")
       .set("Cookie", `token=${token}`)
       .send({ type: "deposit", category: "test", description: "Test transaction" });
     expect(res.status).toBe(400);

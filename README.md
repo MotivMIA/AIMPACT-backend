@@ -7,9 +7,9 @@ Run `./rebuild-aim-backend.sh [--no-prompt] [--quiet] [--build]` to set up the p
 
 ## Run
 - Development: `npm run dev`
-- API Docs: `http://localhost:5001/api-docs`
-- Health Check: `http://localhost:5001/api/health`
-- Metrics: `http://localhost:5001/metrics`
+- API Docs: `http://localhost:5001/api/v1/docs`
+- Health Check: `http://localhost:5001/api/v1/health`
+- Metrics: `http://localhost:5001/api/v1/metrics`
 
 ## Deployment
 Run `./deploy.sh` with `deploy.env` configured for Docker Hub and Render.
@@ -21,3 +21,4 @@ Run `./deploy.sh` with `deploy.env` configured for Docker Hub and Render.
 - MongoDB with AWS Secrets Manager
 - Prometheus Metrics
 - Request Logging
+- API Versioning (v1)

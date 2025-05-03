@@ -15,10 +15,10 @@ afterAll(async () => {
   await mongoServer.stop();
 });
 
-describe("POST /api/auth/register", () => {
+describe("POST /api/v1/auth/register", () => {
   it("should register a new user", async () => {
     const res = await request(app)
-      .post("/api/auth/register")
+      .post("/api/v1/auth/register")
       .send({ email: "test@example.com", password: "password123" });
     expect(res.status).toBe(201);
     expect(res.body.message).toBe("Registration successful");
@@ -27,7 +27,7 @@ describe("POST /api/auth/register", () => {
 
   it("should fail if email is invalid", async () => {
     const res = await request(app)
-      .post("/api/auth/register")
+      .post("/api/v1/auth/register")
       .send({ email: "invalid", password: "password123" });
     expect(res.status).toBe(400);
     expect(res.body.message).toBe("Invalid email");

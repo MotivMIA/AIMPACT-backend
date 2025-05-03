@@ -8,6 +8,7 @@ import transactionRoutes from "./routes/transactionRoutes";
 import healthRoutes from "./routes/healthRoutes";
 import { metricsMiddleware, setupMetrics } from "./middleware/metricsMiddleware";
 import { loggerMiddleware } from "./middleware/loggerMiddleware";
+import { errorMiddleware } from "./middleware/errorMiddleware";
 import { setupSwagger } from "./swagger";
 
 const app: Express = express();
@@ -19,12 +20,13 @@ app.use(cookieParser());
 app.use(metricsMiddleware);
 app.use(loggerMiddleware);
 
-app.use("/api/auth", authRoutes);
-app.use("/api/user", userRoutes);
-app.use("/api/transactions", transactionRoutes);
-app.use("/api", healthRoutes);
+app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/user", userRoutes);
+app.use("/api/v1/transactions", transactionRoutes);
+app.use("/api/v1", healthRoutes);
 
 setupSwagger(app);
 setupMetrics(app);
+app.use(errorMiddleware);
 
 export default app;
