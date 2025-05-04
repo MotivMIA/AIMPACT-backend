@@ -4,8 +4,8 @@ import { Server } from "http";
 export const setupWebSocket = (server: Server) => {
   const wss = new WebSocketServer({ server });
 
-  wss.on("connection", (ws) => {
-    ws.on("message", (message) => {
+  wss.on("connection", (ws: WebSocket) => {
+    ws.on("message", (message: Buffer) => {
       console.log("Received:", message.toString());
     });
     ws.send(JSON.stringify({ message: "Connected to WebSocket" }));
@@ -15,7 +15,7 @@ export const setupWebSocket = (server: Server) => {
 };
 
 export const broadcastTransactionUpdate = (wss: WebSocketServer, transaction: any) => {
-  wss.clients.forEach((client) => {
+  wss.clients.forEach((client: WebSocket) => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(JSON.stringify({ type: "transactionUpdate", transaction }));
     }
