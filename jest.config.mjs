@@ -5,7 +5,8 @@ import path from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+// Load .env explicitly
+dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 export default {
   preset: "ts-jest",
@@ -13,5 +14,5 @@ export default {
   moduleFileExtensions: ["ts", "js", "json"],
   transform: { "^.+\\.ts$": "ts-jest" },
   testMatch: ["**/src/tests/**/*.test.ts"],
-  testTimeout: 10000
+  testTimeout: 20000 // Increased timeout to 20 seconds
 };

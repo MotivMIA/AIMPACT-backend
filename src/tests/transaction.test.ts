@@ -19,7 +19,9 @@ beforeAll(async () => {
   await mongoose.connect(mongoServer.getUri());
   const user = new User({ email: "test@example.com", password: "hashed" });
   await user.save();
-  token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET!, { expiresIn: "1h" });
+  // Ensure JWT_SECRET is set; fallback to a test secret if undefined
+  const jwtSecret = process.env.JWT_SECRET || "test-secret";
+  token = jwt.sign({ userId: user._id }, jwtSecret, { expiresIn: "1h" });
   const transaction = new Transaction({ userId: user._id, amount: 100, type: "deposit", status: "Pending" });
   await transaction.save();
   transactionId = transaction._id.toString();
@@ -33,7 +35,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await mongoose.disconnect();
+  await mongoose.connection.close();
   await mongoServer.stop();
   jest.clearAllMocks();
 });
