@@ -1,0 +1,10 @@
+node_modules/
+dist/
+data/
+logs/
+*.log
+.env
+deploy.env
+.git/
+.github/
+aim-backend-backup-*.tar.gz
