@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Backend for AIM Crypto project",
   "main": "dist/server.js",
-  "type": "commonjs",
+  "type": "module",
   "scripts": {
     "dev": "npx tsx src/server.ts",
     "build": "npx tsc",
