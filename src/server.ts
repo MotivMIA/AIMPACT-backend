@@ -1,5 +1,4 @@
 import dotenv from "dotenv";
-import AWS from "aws-sdk";
 import { createServer } from "http";
 import app from "./app";
 import connectDB from "./db";
@@ -7,30 +6,10 @@ import { setupWebSocket } from "./websocket";
 
 dotenv.config();
 
-const secretsManager = new AWS.SecretsManager({ region: process.env.AWS_REGION || "us-east-1" });
-
-async function getSecrets() {
-  // Skip AWS Secrets Manager in local development
-  if (process.env.NODE_ENV === "development") {
-    console.log("Running in development mode, using local .env variables");
-    return;
-  }
-  try {
-    const data = await secretsManager.getSecretValue({ SecretId: process.env.SECRETS_ID || "aim-backend-secrets" }).promise();
-    if (data.SecretString) {
-      const secrets = JSON.parse(data.SecretString);
-      Object.assign(process.env, secrets);
-    }
-  } catch (err) {
-    console.error("Using local env vars; secrets fetch failed:", err);
-  }
-}
-
-const PORT = process.env.PORT || 5001;
-const MONGO_URI = process.env.MONGO_URI || `mongodb://${process.env.MONGO_USER}:${process.env.MONGO_PASSWORD}@${process.env.MONGO_HOST}/${process.env.MONGO_DB}?authSource=admin`;
+const PORT = process.env.PORT || 10000;
+const MONGO_URI = process.env.MONGO_URI;
 
 (async () => {
-  await getSecrets();
   if (!MONGO_URI) throw new Error("MongoDB URI not provided");
   await connectDB();
   const server = createServer(app);
