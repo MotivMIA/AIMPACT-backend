@@ -1,10 +1,5 @@
-node_modules/
-dist/
-data/
-logs/
+node_modules
+dist
+.git
+.gitignore
 *.log
-.env
-deploy.env
-.git/
-.github/
-aim-backend-backup-*.tar.gz
