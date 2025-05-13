@@ -31,8 +31,9 @@ router.post("/send-xnr", async (req, res) => {
     const result = await client.submitAndWait(signed.tx_blob);
     await client.disconnect();
     res.json({ success: true, result });
-  } catch (err: Error) {
-    res.status(500).json({ error: err.message });
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
+    res.status(500).json({ error: errorMessage });
   }
 });
 
