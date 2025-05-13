@@ -2,8 +2,8 @@ import dotenv from "dotenv";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { createServer } from "http";
 import app from "./app.js";
-import connectDB from "./db";
-import { setupWebSocket } from "./websocket";
+import connectDB from "./db.js";
+import { setupWebSocket } from "./websocket.js";
 import xrpl from "xrpl";
 
 dotenv.config();
