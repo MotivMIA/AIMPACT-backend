@@ -34,9 +34,6 @@ router.post("/send-xnr", async (req, res) => {
   } catch (err: Error) {
     res.status(500).json({ error: err.message });
   }
-ascync finally {
-    await Promise.resolve();
-  }
 });
 
 export default router;
