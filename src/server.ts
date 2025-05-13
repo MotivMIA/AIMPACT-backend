@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { createServer } from "http";
-import app from "./app";
+import app from "./app.js";
 import connectDB from "./db";
 import { setupWebSocket } from "./websocket";
 import xrpl from "xrpl";
