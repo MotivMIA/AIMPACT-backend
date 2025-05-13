@@ -1,15 +1,44 @@
 import dotenv from "dotenv";
+import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { createServer } from "http";
 import app from "./app";
 import connectDB from "./db";
 import { setupWebSocket } from "./websocket";
+import xrpl from "xrpl";
 
 dotenv.config();
+
+const secretsManager = new SecretsManagerClient({ region: process.env.AWS_REGION || "us-east-1" });
+
+async function getSecrets() {
+  if (process.env.NODE_ENV === "development") {
+    console.log("Running in development mode, using local .env variables");
+    return;
+  }
+  try {
+    const command = new GetSecretValueCommand({ SecretId: process.env.SECRETS_ID || "xnr-backend-secrets" });
+    const data = await secretsManager.send(command);
+    if (data.SecretString) {
+      const secrets = JSON.parse(data.SecretString);
+      Object.assign(process.env, secrets);
+    }
+  } catch (err) {
+    console.error("Using local env vars; secrets fetch failed:", err);
+  }
+}
+
+const xrplClient = new xrpl.Client("wss://testnet.xrpl-labs.com"); // Testnet
+async function initXRPL() {
+  await xrplClient.connect();
+  console.log("Connected to XRPL Testnet");
+}
 
 const PORT = process.env.PORT || 10000;
 const MONGO_URI = process.env.MONGO_URI;
 
 (async () => {
+  await initXRPL();
+  await getSecrets();
   if (!MONGO_URI) throw new Error("MongoDB URI not provided");
   await connectDB();
   const server = createServer(app);
