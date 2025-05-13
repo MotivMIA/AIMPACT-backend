@@ -4,12 +4,19 @@ import xrpl from "xrpl";
 const router = Router();
 
 router.post("/send-xnr", async (req, res) => {
-  const { senderSeed, destination, amount } = req.body;
+  const { senderSeed, destination, amount } = req.body as {
+    senderSeed: string;
+    destination: string;
+    amount: string;
+  };
   try {
+    if (!senderSeed || !destination || !amount) {
+      throw new Error("Missing required fields: senderSeed, destination, or amount");
+    }
     const client = new xrpl.Client("wss://testnet.xrpl-labs.com");
     await client.connect();
     const wallet = xrpl.Wallet.fromSeed(senderSeed);
-    const tx = {
+    const tx: xrpl.Payment = {
       TransactionType: "Payment",
       Account: wallet.address,
       Destination: destination,
@@ -24,8 +31,11 @@ router.post("/send-xnr", async (req, res) => {
     const result = await client.submitAndWait(signed.tx_blob);
     await client.disconnect();
     res.json({ success: true, result });
-  } catch (err) {
+  } catch (err: Error) {
     res.status(500).json({ error: err.message });
+  }
+ascync finally {
+    await Promise.resolve();
   }
 });
 
