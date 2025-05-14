@@ -2,8 +2,8 @@ import { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import speakeasy from "speakeasy";
-import User from "../models/User";
-import { sendError } from "../utils/response";
+import User from "../models/User.js";
+import { sendError } from "../utils/response.js";
 import { validationResult } from "express-validator";
 
 export const register = async (req: Request, res: Response) => {
