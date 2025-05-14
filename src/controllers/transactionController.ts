@@ -1,9 +1,9 @@
 import { Request, Response } from "express";
 import { WebSocketServer } from "ws";
-import Transaction from "../models/Transaction";
-import { sendError } from "../utils/response";
+import Transaction from "../models/Transaction.js";
+import { sendError } from "../utils/response.js";
 import { validationResult } from "express-validator";
-import { broadcastTransactionUpdate } from "../websocket";
+import { broadcastTransactionUpdate } from "../websocket.js";
 
 export const createTransaction = async (req: Request, res: Response) => {
   const errors = validationResult(req);

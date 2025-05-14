@@ -1,8 +1,8 @@
 import { WebSocket, WebSocketServer } from "ws";
 import { createServer, Server } from "http";
 import { AddressInfo } from "net";
-import app from "../app";
-import { setupWebSocket } from "../websocket";
+import app from "../app.js";
+import { setupWebSocket } from "../websocket.js";
 
 describe("WebSocket", () => {
   let server: Server;

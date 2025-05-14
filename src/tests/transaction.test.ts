@@ -1,10 +1,10 @@
 import request from "supertest";
-import app from "../app";
+import app from "../app.js";
 import mongoose from "mongoose";
 import { MongoMemoryServer } from "mongodb-memory-server";
 import jwt from "jsonwebtoken";
-import User from "../models/User";
-import Transaction from "../models/Transaction";
+import User from "../models/User.js";
+import Transaction from "../models/Transaction.js";
 import { WebSocketServer, WebSocket } from "ws";
 
 jest.mock("ws");
