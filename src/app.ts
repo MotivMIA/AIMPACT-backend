@@ -1,4 +1,4 @@
-import express from "express";
+import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import { rateLimit } from "express-rate-limit";
@@ -21,12 +21,12 @@ app.use("/api/v1", healthRoutes);
 app.use("/api/v1", authRoutes);
 app.use("/api/v1", xnrRoutes);
 
-app.get("/api/v1/health", (req, res) => {
+app.get("/api/v1/health", (req: Request, res: Response) => {
   res.json({ status: "OK", timestamp: new Date().toISOString() });
 });
 
-// Error handling middleware for validation errors
-app.use((req, res, next) => {
+// Validation error handling middleware
+app.use((req: Request, res: Response, next: NextFunction) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     return res.status(400).json({ errors: errors.array() });
@@ -35,7 +35,7 @@ app.use((req, res, next) => {
 });
 
 // General error handler
-app.use((err, req, res, next) => {
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   console.error(err.stack);
   res.status(500).json({ error: "Internal server error" });
 });
