@@ -34,3 +34,6 @@ Run `./deploy.sh` with `deploy.env` configured for Docker Hub and Render.
 - API Versioning (v1)
 - WebSocket for Real-Time Notifications
 - Paginated Transaction History
+
+# XNR Backend
+Backend URL: https://xnr-backend.onrender.com
