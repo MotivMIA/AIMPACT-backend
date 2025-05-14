@@ -5,3 +5,6 @@ deploy.env
 *.log
 data/
 logs/
+error.log
+mongod.log
+verification.log
