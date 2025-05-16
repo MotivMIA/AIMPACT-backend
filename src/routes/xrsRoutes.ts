@@ -1,5 +1,5 @@
 // src/routes/xrsRoutes.ts
-import { Request, Response } from "express";
+import { Router, Request, Response } from "express";
 import xrpl from "xrpl";
 
 const router = Router();
@@ -11,12 +11,12 @@ router.post("/send-xrs", async (req: Request, res: Response) => {
     const client = new xrpl.Client("wss://testnet.xrpl-labs.com");
     await client.connect();
     const wallet = xrpl.Wallet.fromSeed(senderSeed);
-    const tx = {
+    const tx: xrpl.Payment = {
       TransactionType: "Payment",
       Account: wallet.address,
       Destination: destination,
       Amount: {
-        currency: "XRS", // Changed from XNR
+        currency: "XRS",
         value: amount.toString(),
         issuer: "r9x1fYx6gZetG7wTtFCtWvWtA2B995eQVq"
       }
@@ -34,7 +34,10 @@ router.post("/send-xrs", async (req: Request, res: Response) => {
 
 router.get("/balance", async (req: Request, res: Response) => {
   try {
-    const { address } = req.query;
+    const address = req.query.address as string;
+    if (!address) {
+      return res.status(400).json({ message: "Address required" });
+    }
     console.log("Fetching balance for address:", address);
     const client = new xrpl.Client("wss://testnet.xrpl-labs.com");
     await client.connect();

@@ -4,3 +4,8 @@ declare module 'express-serve-static-core' {
     user?: { userId: string };
   }
 }
+declare module 'express' {
+  interface Request {
+    user?: { userId: string };
+  }
+}
