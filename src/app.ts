@@ -17,18 +17,23 @@ app.use(rateLimit({
   max: parseInt(process.env.RATE_LIMIT_MAX || "100")
 }));
 
+console.log("Mounting routes...");
 app.use("/api/v1", healthRoutes);
+console.log("Mounted healthRoutes");
 app.use("/api/v1", authRoutes);
+console.log("Mounted authRoutes");
 app.use("/api/v1", xnrRoutes);
+console.log("Mounted xnrRoutes");
 
 app.get("/api/v1/health", (req: Request, res: Response) => {
   res.json({ status: "OK", timestamp: new Date().toISOString() });
 });
 
-// Validation error handling middleware
+// Validation error handling
 app.use((req: Request, res: Response, next: NextFunction) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    console.log("Validation errors:", errors.array());
     return res.status(400).json({ errors: errors.array() });
   }
   next();
@@ -36,7 +41,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
 // General error handler
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-  console.error(err.stack);
+  console.error("Server error:", err.stack);
   res.status(500).json({ error: "Internal server error" });
 });
 
