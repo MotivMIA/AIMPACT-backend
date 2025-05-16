@@ -15,4 +15,4 @@ RUN ls -la /app/dist/ && npm install --production
 ENV PORT=10000
 EXPOSE 10000
 CMD ["npm", "start"]
-# docker buildx build --platform linux/arm64,linux/amd64 -t xnr-backend:latest .
+# docker buildx build --platform linux/arm64,linux/amd64 -t xrs-backend:latest .
