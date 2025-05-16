@@ -28,9 +28,9 @@ import xrpl from "xrpl";
            TransactionType: "TrustSet",
            Account: operationalWallet.address,
            LimitAmount: {
-             currency: "XNR",
+             currency: "XRS",
              issuer: issuingWallet.address,
-             value: "1000000000" // 1 billion XNR
+             value: "1000000000" // 1 billion XRS
            }
          };
          const preparedTrustSet = await client.autofill(trustSetTx);
@@ -41,13 +41,13 @@ import xrpl from "xrpl";
          // Wait to ensure ledger update
          await new Promise(resolve => setTimeout(resolve, 4000));
 
-         // Issue 1 billion XNR tokens
+         // Issue 1 billion XRS tokens
          const paymentTx = {
            TransactionType: "Payment",
            Account: issuingWallet.address,
            Destination: operationalWallet.address,
            Amount: {
-             currency: "XNR",
+             currency: "XRS",
              issuer: issuingWallet.address,
              value: "1000000000"
            }
@@ -55,13 +55,13 @@ import xrpl from "xrpl";
          const preparedPayment = await client.autofill(paymentTx);
          const signedPayment = issuingWallet.sign(preparedPayment);
          const paymentResult = await client.submitAndWait(signedPayment.tx_blob);
-         console.log("XNR Issued:", JSON.stringify(paymentResult, null, 2));
+         console.log("XRS Issued:", JSON.stringify(paymentResult, null, 2));
 
          await client.disconnect();
          console.log("Disconnected from XRPL Testnet");
        } catch (err) {
-         console.error("Error issuing XNR:", err);
+         console.error("Error issuing XRS:", err);
        }
      }
 
-     issueXNR();
+     issueXRS();

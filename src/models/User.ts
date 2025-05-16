@@ -5,13 +5,17 @@ export interface IUser extends Document {
   password: string;
   isTwoFactorEnabled: boolean;
   twoFactorSecret?: string;
+  wallet: { balance: { type: Number, default: 0 }, address: { type: String } },
+  createdAt: Date;
 }
 
 const userSchema: Schema = new Schema({
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   isTwoFactorEnabled: { type: Boolean, default: false },
-  twoFactorSecret: { type: String }
+  twoFactorSecret: { type: String },
+  wallet: { balance: { type: Number, default: 0 }, address: { type: String } },
+  createdAt: { type: Date, default: Date.now }
 });
 
 export default mongoose.model<IUser>("User", userSchema);

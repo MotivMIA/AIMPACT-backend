@@ -1,3 +1,4 @@
+// test_trust_line.js
 import xrpl from "xrpl";
 
 async function setTrustLine() {
@@ -9,7 +10,7 @@ async function setTrustLine() {
       TransactionType: "TrustSet",
       Account: wallet.address,
       LimitAmount: {
-        currency: "XNR",
+        currency: "XRS", // Changed from XNR
         issuer: "r9x1fYx6gZetG7wTtFCtWvWtA2B995eQVq",
         value: "1000000000"
       }
