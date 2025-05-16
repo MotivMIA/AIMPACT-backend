@@ -5,8 +5,7 @@ import { rateLimit } from "express-rate-limit";
 import { validationResult } from "express-validator";
 import healthRoutes from "./routes/healthRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
-import xnrRoutes from "./routes/xnrRoutes.js";
-
+import xrsRoutes from "./routes/xrsRoutes.js"; // Changed from xnrRoutes.js
 const app = express();
 
 app.use(cors());
@@ -22,8 +21,8 @@ app.use("/api/v1", healthRoutes);
 console.log("Mounted healthRoutes");
 app.use("/api/v1", authRoutes);
 console.log("Mounted authRoutes");
-app.use("/api/v1", xnrRoutes);
-console.log("Mounted xnrRoutes");
+app.use("/api/v1", xrsRoutes);
+console.log("Mounted xrsRoutes");
 
 app.get("/api/v1/health", (req: Request, res: Response) => {
   res.json({ status: "OK", timestamp: new Date().toISOString() });
