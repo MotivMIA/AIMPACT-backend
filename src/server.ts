@@ -16,7 +16,7 @@ async function getSecrets() {
     return;
   }
   try {
-    const command = new GetSecretValueCommand({ SecretId: process.env.SECRETS_ID || "xnr-backend-secrets" });
+    const command = new GetSecretValueCommand({ SecretId: process.env.SECRETS_ID || "xrs-backend-secrets" });
     const data = await secretsManager.send(command);
     if (data.SecretString) {
       const secrets = JSON.parse(data.SecretString);
