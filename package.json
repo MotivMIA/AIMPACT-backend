@@ -1,7 +1,7 @@
 {
-  "name": "xnr-backend",
+  "name": "xrs-backend",
   "version": "1.0.0",
-  "description": "Backend for Novara Resonance ($XNR) Crypto project",
+  "description": "Backend for Novara Resonance ($XRS) Crypto project",
   "main": "dist/server.js",
   "type": "module",
   "scripts": {
