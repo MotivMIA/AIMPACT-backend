@@ -19,17 +19,17 @@
  fi
 
  echo "Building Docker image..."
- docker build --platform linux/amd64 -t xnr-backend:amd64 . || {
+ docker build --platform linux/amd64 -t xrs-backend:amd64 . || {
    echo "Error: Docker build failed. Check disk space, Docker configuration, or build context."
    exit 1
  }
 
  echo "Tagging and pushing to Docker Hub..."
- docker tag xnr-backend:amd64 "$DOCKERHUB_USERNAME/xnr-backend:amd64" || {
+ docker tag xrs-backend:amd64 "$DOCKERHUB_USERNAME/xrs-backend:amd64" || {
    echo "Error: Docker tag failed."
    exit 1
  }
- docker push "$DOCKERHUB_USERNAME/xnr-backend:amd64" || {
+ docker push "$DOCKERHUB_USERNAME/xrs-backend:amd64" || {
    echo "Error: Docker push failed. Ensure you are logged in with 'docker login'."
    exit 1
  }
@@ -38,7 +38,7 @@
  curl -X POST \
    -H "Authorization: Bearer $RENDER_API_KEY" \
    -H "Content-Type: application/json" \
-   -d "{\"serviceId\": \"$RENDER_SERVICE_ID\", \"image\": \"$DOCKERHUB_USERNAME/xnr-backend:amd64\"}" \
+   -d "{\"serviceId\": \"$RENDER_SERVICE_ID\", \"image\": \"$DOCKERHUB_USERNAME/xrs-backend:amd64\"}" \
    https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys || {
    echo "Error: Render deployment failed. Verify RENDER_API_KEY and RENDER_SERVICE_ID."
    exit 1
