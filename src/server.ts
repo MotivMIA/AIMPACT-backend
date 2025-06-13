@@ -11,7 +11,7 @@ dotenv.config();
 const secretsManager = new SecretsManagerClient({ region: process.env.AWS_REGION || "us-east-1" });
 
 async function getSecrets() {
-  if (process.env.NODE_ENV === "development") {
+  if (process.env.NODE_ENV === "production") {
     console.log("Running in development mode, using local .env variables");
     return;
   }
